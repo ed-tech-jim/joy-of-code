@@ -54,7 +54,7 @@ Let's look at the same example in Svelte:
   let count = $state(0)
 
   function increment() {
-		count += 1
+		count++
   }
 </script>
 
@@ -133,7 +133,7 @@ In the last example, we defined a reactive variable `count` using the `$state` s
   let count = $state(0)
 
   function increment() {
-    count += 1
+    count++
   }
 </script>
 
@@ -152,7 +152,7 @@ The `$state` rune marks a variable as reactive. Svelte's reactivity is based on 
 
   function increment() {
 		// reactive assignment
-    count += 1
+    count++
   }
 </script>
 
@@ -161,131 +161,98 @@ The `$state` rune marks a variable as reactive. Svelte's reactivity is based on 
 <button onclick={increment}>Click</button>
 ```
 
-In Svelte components don't rerun when a value changes like in React. Instead, Svelte surgically updates the DOM in place when a value updates.
+In Svelte, components don't rerun when a value changes like in React. Instead, Svelte surgically updates the DOM in place when a value updates.
 
-Because we need to assign a value for Svelte to pick it up methods like `push` won't trigger an update until we reassign it. We can avoid doing the extra step by using the JavaScript spread operator `...` to keep existing items and add the new item.
+If you want a value to automatically update when other values it depends on update, you should use the `$derived` rune to create a computed property:
 
-```svelte:App.svelte {10} showLineNumbers
+```svelte:app.svelte
 <script>
-  let list = ['React', 'Vue']
+  let count = $state(0)
+	let double = $derived(count * 2)
 
-  function handleClick() {
-    // doesn't update
-    list.push('Svelte')
-    // until you assign it
-    list = list
-    // so it's easier doing this
-    list = [...list, 'Svelte']
+  function increment() {
+    count++
   }
 </script>
 
-<p>{list}</p>
-<button on:click={handleClick}>Click</button>
+<button onclick={increment}>
+	{doubled}
+</button>
 ```
 
-Sometimes you need to change a value based on other values. This is referred to as a **computed property**.
+The `$derived` rune only accepts an expression by default, but you can use the `$derived.by` rune if you want to pass a function for a more complex derivation:
 
-Svelte has **reactive declarations** using the `$:` syntax which is valid [JavaScript label syntax](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/label) that Svelte stole for itself.
-
-Using the `$:` syntax is saying **"re-run this code whenever any of the referenced values change"**.
-
-```svelte:App.svelte {6, 13} showLineNumbers
+```svelte:app.svelte
 <script>
-	// state
-	let items = [1, 2, 3, 4]
+	let count = $state(0)
+	let double = $derived(count * 2)
+	let history = $derived.by(() => {
+		let doubles = []
 
-	// computed
-	$: amount = items.length
-
-	function addItem() {
-		items = [...items, items.length + 1]
-	}
-</script>
-
-<p>The amount is {amount}</p>
-<button on:click={addItem}>Add item</button>
-```
-
-**Think about it as giving Svelte dependencies to watch and rerun the code when the value changes** because in `$: albumLength = getAlbumLength(album)` on the right `album` is the referenced value.
-
-```svelte:App.svelte {10, 32-35} showLineNumbers
-<script>
-	// state
-	let album = [
-		{ track: 'Track 1', length: 180 },
-		{ track: 'Track 2', length: 240 },
-		{ track: 'Track 3', length: 280 },
-	]
-
-	// computed
-	$: albumLength = getAlbumLength(album)
-
-	function getAlbumLength(album) {
-		let lengthSeconds = album.reduce(
-			(totalLength, currentValue) => {
-			return totalLength + currentValue.length
-		}, 0)
-
-		let [minutes, seconds] =
-		(lengthSeconds / 60)
-		.toFixed(2)
-		.toString()
-		.split('.')
-
-		return { minutes, seconds }
-	}
-
-	function addTrack() {
-		album = [...album, { track: 'Track 4', length: 420 }]
-	}
-</script>
-
-<p>
-	Album length is {albumLength.minutes} minutes and
-	{albumLength.seconds} seconds.
-</p>
-<button on:click={addTrack}>Add track</button>
-```
-
-One of the cool things you can do is log a value whenever it changes so it's easy to see what's going on.
-
-```svelte:App.svelte {3} showLineNumbers
-<script>
-	let count = 0
-	$: console.log(count)
-</script>
-
-<button on:click={() => count += 1}>Click</button>
-```
-
-You can have reactive blocks.
-
-```svelte:App.svelte {4-11} showLineNumbers
-<script>
-	let count = 0
-
-	$: {
-		console.log(`The count is ${count}`)
-
-		if (count >= 4) {
-			console.log('Restarting count.')
-			count = 0
+		return {
+			get doubles() {
+				doubles.push(double)
+				return doubles.join(', ')
+			}
 		}
-	}
+	})
 </script>
 
-<button on:click={() => count += 1}>Click</button>
+<button onclick={() => count++}>
+	{history.doubles}
+</button>
 ```
 
-Ignore the weird syntax highlighting because there isn't an extension for `.svelte` files so it's treated like `.html` which can be fixed by using quotes `on:click="{() => count += 1}"`. Your editor is going to support the syntax if you use the [Svelte for VS Code](https://marketplace.visualstudio.com/items?itemName=svelte.svelte-vscode) extension.
+Derived values are lazy evaluted. The derived value only updates when it changes and not when their dependencies change.
 
-## Logic
+The last rune you should know about is the `$effect` rune. Effects are functions that run when the component mounts and when reactive values inside of them update. You can also return a function from an effect that reruns when the reactive values update and when the component unmounts:
+
+```svelte:app.svelte
+<script>
+	let count = $state(0)
+
+	$effect(() => {
+		console.log(`The count is ${count}`)
+		return () => console.log('🧹 cleanup')
+	})
+</script>
+
+<button onclick={() => count++}>
+	{count}
+</button>
+```
+
+**You should never use effects to synchronize state** because Svelte queues effects and runs them last after the code ran and everything is updated.
+
+Effects should only be used for side-effects like fetching data from an API, working with the DOM directly, or to synchronize with an external system that doesn't understand Svelte's reactivity:
+
+```svelte:app.svelte
+<script>
+	let pokemon = $state()
+
+	$effect(() => {
+		const cache = JSON.deserialize(localStorage.getItem('pokemon'))
+		if (!cache) {
+			fetch('https://pokeapi.co/api/v2/')
+				.then(response => pokemon = response.json())
+		} else {
+			pokemon = cache
+		}
+	})
+
+	$effect(() => {
+		localStorage.setItem('pokemon', JSON.stringify(pokemon))
+	})
+</script>
+
+<pre>{JSON.stringify(pokemon, null, 2)}</pre>
+```
+
+## Template Logic
 
 Since HTML can't express logic such as conditionals and loops you would have to write something like this using JavaScript.
 
-```svelte:Example.html showLineNumbers
-<div id="app"></div>
-
+```svelte:app.html
 <script>
   let appElement = document.querySelector('#app')
 
@@ -315,6 +282,8 @@ Since HTML can't express logic such as conditionals and loops you would have to 
 
   updateUI()
 </script>
+
+<div id="app"></div>
 ```
 
 It doesn't look bad but I think we can do better. This is the same example using an `#if` block in Svelte.

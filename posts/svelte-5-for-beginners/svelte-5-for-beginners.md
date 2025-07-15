@@ -296,41 +296,7 @@ Effects should only be used for side-effects like fetching data from an API, wor
 
 ## Template Logic
 
-There are no conditionals and loops in HTML unless you're using a templating language, so you would handle that with JavaScript:
-
-```svelte:app.html
-<script>
-  let appElement = document.querySelector('#app')
-
-  let user = { loggedIn: false }
-
-	function toggle() {
-	  user.loggedIn = !user.loggedIn
-		updateUI()
-	}
-
-	function updateUI() {
-    let html
-
-	  if (user.loggedIn) {
-		  html = `<button>Log out</button>`
-		}
-
-		if (!user.loggedIn) {
-		  html = `<button>Log in</button>`
-		}
-
-	  appElement.innerHTML = html
-    appElement.querySelector('button').onclick = toggle
-	}
-
-  updateUI()
-</script>
-
-<div id="app"></div>
-```
-
-In Svelte, you can use the `#if` block to conditionally render content:
+There are no conditionals and loops in HTML unless you're using a templating language. In Svelte, you can use the `#if` block to conditionally render content:
 
 ```svelte:app.svelte
 <script>
@@ -348,38 +314,7 @@ In Svelte, you can use the `#if` block to conditionally render content:
 {/if}
 ```
 
-To loop over a list of items in JavaScript, you would have to do something like this:
-
-```svelte:app.html
-<script>
-  let appElement = document.querySelector('#app')
-
-	let todos = [
-		{ id: 1, text: 'Todo 1', done: true },
-		{ id: 2, text: 'Todo 2', done: false },
-		{ id: 3, text: 'Todo 3', done: false },
-		{ id: 4, text: 'Todo 4', done: false },
-	]
-
-	let todosHtml = ''
-
-	for (let todo of todos) {
-    let checked = todo.done ? 'checked' : null
-	  todosHtml += `
-      <li data-id=${todo.id}>
-		    <input ${checked} type="checkbox" />
-		    <span>${todo.text}</span>
-	    </li>
-		`
-	}
-
-	appElement.innerHTML = `<ul>${todosHtml}</ul>`
-</script>
-
-<div id="app"></div>
-```
-
-In Svelte, you can loop over a list of items using the `#each` block:
+To loop over a list of items, you use the `#each` block:
 
 ```svelte:app.svelte
 <script>
@@ -397,9 +332,13 @@ In Svelte, you can loop over a list of items using the `#each` block:
 			<input checked={todo.done} type="checkbox" />
 			<span>{todo.text}</span>
 		</li>
+	{:else}
+		<p>No items</p>
 	{/each}
 </ul>
 ```
+
+{% info text="The else clause is optional." %}
 
 You can [destructure](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Destructuring_assignment) the items values you're iterating over, get the current item index and provide a key, so Svelte can keep track of changes:
 
@@ -440,34 +379,7 @@ Sometimes you just want to create an arbitrary amount of items like a grid, so y
 </style>
 ```
 
-How about fetching data on the client? This is how it would look using JavaScript:
-
-```svelte:app.html
-<script>
-  let appElement = document.querySelector('#app')
-
-  async function getPokemon(name) {
-    let response = await fetch(`https://pokeapi.co/api/v2/pokemon/${name}`)
-    let { name, sprites } = await response.json()
-		return { name, image: sprites['front_default'] }
-  }
-
-  async function renderUI() {
-    let pokemon = await getPokemon('charizard')
-
-    appElement.innerHTML = `
-      <h1>${pokemon.name}</h1>
-      <img src=${pokemon.image} alt=${pokemon.name} />
-    `
-  }
-
-  renderUI()
-</script>
-
-<div id="app"></div>
-```
-
-In a previous example we fetched the Pokemon data inside of an effect. That approach works, but we haven't handled any of the the error and success states which quickly becomes a mess.
+In a previous example, we fetched some Pokemon data inside of an effect. That approach works, but we haven't handled any of the the error and success states which quickly becomes a mess.
 
 Thankfully, Svelte has a built-in solution for async data loading using the `#await` block:
 
@@ -481,7 +393,7 @@ Thankfully, Svelte has a built-in solution for async data loading using the `#aw
 </script>
 
 {#await getPokemon('charizard')}
-	<p>Loading...</p>
+	<p>loading...</p>
 {:then pokemon}
 	<p>{pokemon.name}</p>
 	<img src={pokemon.image} alt={pokemon.name} />
@@ -502,194 +414,212 @@ export default {
 }
 ```
 
-At the moment you have to create a Svelte boundary which you can put at the root of your app, or where you want to use the `await` keyword:
+At the moment you have to create a [boundary](https://svelte.dev/docs/svelte/svelte-boundary) which you can put at the root of your app, or where you want to use the `await` keyword:
 
 ```svelte:app.svelte
 <script>
+	// pretend this is an import
 	import { getPokemon } from 'api/pokemon'
+
+	// you could use `await` here if the boundary was declared higher up
 	let pokemon = getPokemon('charizard')
 </script>
 
 <svelte:boundary>
 	{#snippet pending()}
-		<p>Loading...</p>
+		<!-- this only shows when the component mounts -->
+		<p>loading...</p>
 	{/snippet}
 
-	<p>{(await pokemon).name}</p>
-	<img src={(await pokemon).image} alt={(await pokemon).name} />
+	<!-- for loading new data -->
+	{#if $effect.pending()}
+		<p>loading...</p>
+	{:else}
+		<p>{(await pokemon).name}</p>
+		<img src={(await pokemon).image} alt={(await pokemon).name} />
+	{/if}
 </svelte:boundary>
 ```
 
-## Handling Events
+## Listening To Events
 
-If you're new to JavaScript frameworks you might be confused by the use of **inline event handlers** because so far everyone told you to avoid doing so in JavaScript. That's for a good reason because of **separation of concerns** to have our markup, styles, and logic separate which makes it easy to change and maintain.
+Events in Svelte use the same naming convention as standard [JavaScript events](https://developer.mozilla.org/en-US/docs/Web/Events#event_listing).
 
-Using a modern JavaScript framework all our **concerns are in one place** using components and writing declarative code and the framework doing the heavy DOM lifting and under the hood performance optimization.
+You can listen to DOM events by adding attributes that start with `on` to elements. In the case of a mouse click, you would add the `onclick` attribute to a `<button>`:
 
-If you want to know about all the Svelte events you won't find them in the Svelte documentation because it's just JavaScript so you can look at the MDN documentation for [event listing](https://developer.mozilla.org/en-US/docs/Web/Events#event_listing). Under the generic `Element` you can find the event listener `dblclick` when someone performs a double click or `mousemove` when the user moves the mouse.
-
-This is an example of an event listener in JavaScript.
-
-```svelte:Example.html showLineNumbers
-<style>
-  html,
-  body {
-    width: 100%;
-    height: 100%;
-    margin: 0;
-  }
-
-  div {
-    height: 100%;
-  }
-</style>
-
-<div id="app"></div>
-
+```svelte:app.svelte
 <script>
-  let appElement = document.querySelector('#app')
-
-  let mouse = { x: 0, y: 0 }
-
-  function handleMouseMove(event) {
-    mouse.x = event.clientX
-    mouse.y = event.clientY
-    updateUI()
-  }
-
-  function updateUI() {
-    appElement.innerHTML = `
-      The mouse position is ${mouse.x} x ${mouse.y}
-    `
-  }
-
-  appElement.addEventListener('mousemove', handleMouseMove)
+	function onclick() {
+		console.log('clicked')
+	}
 </script>
+
+<!-- using an inline function -->
+<button onclick={() => console.log('clicked')}>
+	Click
+</button>
+
+<!-- passing a function -->
+<button onclick={onclick}>
+	Click
+</button>
+
+<!-- using the shorthand -->
+<button {onclick}>Click</button>
 ```
 
-In Svelte you use the `on:` directive to listen to DOM events.
+You can spread events, since they're just attributes:
 
-```svelte:App.svelte {10} showLineNumbers
+```svelte:app.svelte
 <script>
-	let mouse = { x: 0, y: 0 }
+	const events = {
+		onclick: () => console.log('clicked'),
+		ondblclick: () => console.log('double clicked')
+	}
+</script>
 
-	function handleMouseMove(event) {
+<button {...events}>Click</button>
+```
+
+Here's an example of using the `onmousemove` event to update the mouse position:
+
+```svelte:app.svelte
+<script>
+	let mouse = $state({ x: 0, y: 0 })
+
+	function onmousemove(event) {
 		mouse.x = event.clientX
 		mouse.y = event.clientY
 	}
 </script>
 
-<div on:mousemove={handleMouseMove}>
+<div {onmousemove}>
 	The mouse position is {mouse.x} x {mouse.y}
 </div>
-
-<style>
-	div {
-		height: 100vh;
-	}
-</style>
 ```
 
-Svelte sends the `event` alongside your function if you do `on:mousemove={handleMouseMove}` but if you do it inline you have to pass it yourself `on:mousemove={(event) => handleMouseMove(event)}`.
+The `event` is automatically passed to the function, so you don't have to do `onmousemove={(event) => onmousemove(event)}`.
 
-Svelte has special modifiers for DOM events such as `preventDefault`. You can find a complete list under [element directives](https://svelte.dev/docs#Element_directives) and you can chain special modifiers together.
+You can also prevent default behavior by using `event.preventDefault()`. This is useful when you want to control a form with JavaScript and avoid a page reload:
 
-```svelte:App.svelte {7} showLineNumbers
+```svelte:app.svelte
 <script>
-	function handleSubmit() {
-		console.log('Submit')
+	function onsubmit(event) {
+		event.preventDefault()
+		// sign up to newsletter
 	}
 </script>
 
-<form on:submit|preventDefault={handleSubmit}>
-	<input type="text" />
-	<button type="submit">Submit</button>
+<form {onsubmit}>
+	<input type="email" />
+	<button type="submit">Sign up</button>
 </form>
 ```
 
-Using `preventDefault` which is short for `event.preventDefault()` prevents the default behavior such as the form submitting causing a page reload because we want to control it using JavaScript on the client.
+## Data Binding
 
-## Bindings
+In this example we take the user input by listening to the `input` event and filter the list of items based on it:
 
-**Data binding is keeping your application state and user interface synchronized.**
-
-Svelte supports **data binding** using the `bind:` directive.
-
-Often you have a value that other parts depend on for example if you had a text search input and want to filter a list of items whenever the user types a search query.
-
-You can implement data binding in JavaScript but it's not part of the language so you often get the value from the `event`. This is true for other JavaScript frameworks like React that use a synthetic event system and doesn't have data binding.
-
-Filtering a list of items using JavaScript.
-
-```svelte:Example.html showLineNumbers
-<input type="text" />
-<ul></ul>
-
+```svelte:app.svelte
 <script>
-  let list = ['React', 'Vue', 'Svelte']
-  let filteredList = []
-
-  let inputElement = document.querySelector('input')
-  let listElement = document.querySelector('ul')
-
-  function filterList(event) {
-    let searchQuery = event.target.value
-    filteredList = list.filter(item => {
-      return item
-              .toLowerCase()
-              .includes(searchQuery.toLowerCase())
-    })
-    updateUI()
-  }
-
-  function updateUI() {
-    listElement.innerHTML = filteredList.map(item =>
-			`<li>${item}</li>`).join('')
-  }
-
-  inputElement.addEventListener('input', filterList)
-</script>
-```
-
-Instead of using `event.target.value` which we could also do in Svelte we can bind the value of the text input field to `searchQuery` instead.
-
-```svelte:App.svelte {4, 17} showLineNumbers
-<script>
- 	let list = ['React', 'Vue', 'Svelte']
-  let filteredList = []
-	let searchQuery = ''
-
-	function filterList() {
-    filteredList = list.filter(item => {
-      return item
-              .toLowerCase()
-              .includes(searchQuery.toLowerCase())
-    })
-  }
+ 	let list = $state(['angular', 'react', 'svelte', 'vue'])
+  let filteredList = $derived(list.filter(item => item.includes(search)))
+	let search = $state('')
 </script>
 
 <input
-	on:input={filterList}
-	bind:value={searchQuery}
-	type="text"
+	oninput={(e) => search = e.target.value}
+	value={search}
+	type="search"
 />
 
 <ul>
-{#each filteredList as item}
-  <li>{item}</li>
-{/each}
+	{#each filteredList as item}
+		<li>{item}</li>
+	{/each}
 </ul>
 ```
 
-You can have text, numeric, checkbox, group and textarea among other bindings. Instead of overwhelming you with examples you lack context for to find useful right now you can learn more about [bindings in the Svelte documentation](https://svelte.dev/docs#template-syntax-element-directives-bind-property) or by following the [Svelte tutorial](https://learn.svelte.dev/tutorial/text-inputs) when you encounter it in your project.
+This is a lot of boilerplate code for something that's so common in web development. Thankfully, Svelte supports two-way data binding using the `bind:` directive:
+
+```svelte:app.svelte
+<input bind:value={search} type="search" />
+```
+
+Svelte provides many two-way bindings, and some readonly bindings. There are input, group, files, media and more bindings you can find in the [Svelte documentation](https://svelte.dev/docs/svelte/bind):
+
+```svelte:app.svelte
+<script>
+	let text = $state('Hello 👋')
+	let number = $state(0)
+	let checkbox = $state(false)
+	let range = $state(0)
+</script>
+
+<input type="text" bind:value={text} />
+<p>{text}</p>
+
+<input type="number" bind:value={number} />
+<p>{number}</p>
+
+<input type="checkbox" bind:checked={checkbox} />
+
+<input type="range" bind:value={range} min="0" max="100" />
+```
+
+One of the more useful bindings is `bind:this` to get a reference to a DOM node such as the `<canvas>` element for example:
+
+```svelte:app.svelte
+<script>
+	// `undefined` until the component mounts
+	let canvas
+
+	$effect(() => {
+		// ⛔️ don't do this
+		// const canvas = document.querySelector('canvas')
+
+		// 👍️ bind the value instead
+		const ctx = canvas.getContext('2d')
+	})
+</script>
+
+<canvas bind:this={canvas}></canvas>
+```
+
+Another useful thing to know about are **function bindings** when you need to do something with a value when it changes. This works by passing `bind:property={get, set}`, where `get` and `set` are functions:
+
+```svelte:app.svelte
+<script>
+ 	let celsius = $state(0)
+ 	let fahrenheit = $state(0)
+</script>
+
+<input bind:value={
+  () => celsius,
+  (v) => {
+    celsius = v
+    fahrenheit = (celsius * 9/5 + 32).toFixed()
+  }
+} />
+
+<input bind:value={
+  () => fahrenheit,
+  (v) => {
+    fahrenheit = v
+    celsius = ((fahrenheit - 32) * 5/9).toFixed()
+  }
+} />
+```
 
 ## Components
 
-**Components are the primary reason of using any modern JavaScript framework** because it lets you **organize** code and have your **concerns in one place**.
+> Frameworks are not tools for organizing your code, they are tools for organizing your mind. — [Rich Harris](https://www.youtube.com/watch?v=AdNJ3fydeao)
 
-If you ever used classes you can think of components as new instances of a class that can be used as a blueprint to have its own independent state.
+You can think of components as reusable lego blocks that can include the markup, styles, and logic that can be reused across your app. You can use them with other blocks to compose bigger parts of your application.
 
-It's easy to get carried away with components so in general **don't look for what to turn into a component** but write everything inside a single file until it becomes hard to manage and you start noticing repeating parts.
+A Svelte component is a file that ends with the `.svelte` extension.
+
+It might be tempting, but **avoid creating components**. If you're not sure what to turn into a component — don't. Instead, write everything inside a single component until it becomes obvious what which parts warrant their own component, either for reusability, or to make it easier to reason about.
 
 You might have an `<Artist />` component:
 

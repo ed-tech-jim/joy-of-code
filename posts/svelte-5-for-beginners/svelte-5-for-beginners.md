@@ -124,7 +124,7 @@ You can preprocess the styles with [SCSS](https://sass-lang.com/) by simply addi
 </style>
 ```
 
-## Reactivity Using Runes
+## Reactivity And Svelte Runes
 
 In the last example, we defined a reactive variable `count` using the `$state` syntax:
 
@@ -141,7 +141,7 @@ In the last example, we defined a reactive variable `count` using the `$state` s
 <button onclick={increment}>Click</button>
 ```
 
-The `$state` syntax is called a **rune** and is part of the Svelte language. Under the hood Svelte turns the `$state` rune into a signal. The three main important runes we're going to learn about are `$state`, `$derived`, and `$effect`.
+The `$state` syntax is called a **rune** and is part of the Svelte language. Under the hood Svelte turns the `$state` rune into a signal. The three main important runes we're going to learn about are the `$state`, `$derived`, and `$effect` rune.
 
 The `$state` rune marks a variable as reactive. Svelte's reactivity is based on **assignments**. To update the UI, you just assign a new value to a reactive variable:
 
@@ -184,45 +184,88 @@ The `$derived` rune only accepts an expression by default, but you can use the `
 
 ```svelte:app.svelte
 <script>
-	let count = $state(0)
-	let double = $derived(count * 2)
-	let history = $derived.by(() => {
-		let doubles = []
-
-		return {
-			get doubles() {
-				doubles.push(double)
-				return doubles.join(', ')
-			}
+	let cart = $state([
+		{ item: 'apple', total: 10 },
+		{ item: 'banana', total: 10 }
+	])
+	let total = $derived.by(() => {
+		let sum = 0
+		for (let item of cart) {
+			sum += item.total
 		}
+		return sum
 	})
 </script>
 
-<button onclick={() => count++}>
-	{history.doubles}
-</button>
+<p>Total: {total}€</p>
 ```
 
 Derived values are lazy evaluted. The derived value only updates when it changes and not when their dependencies change.
 
-The last rune you should know about is the `$effect` rune. Effects are functions that run when the component mounts and when reactive values inside of them update. You can also return a function from an effect that reruns when the reactive values update and when the component unmounts:
+The last rune you should know about is the `$effect` rune. Effects are functions that run when the component mounts and when their dependencies change. You can also return a function from an effect which reruns when the effect dependencies change, or when the component unmounts.
+
+**Effects don't need a dependency array** because of how signals work — if a reactive value is read inside of an effect, it will be tracked and the effect will rerun when the tracked value changes:
 
 ```svelte:app.svelte
 <script>
 	let count = $state(0)
+	let double = $derived(count * 2)
 
 	$effect(() => {
-		console.log(`The count is ${count}`)
+		// reruns if `count` or `double` changes
+		console.log({ count, double })
+		// also runs when the component unmounts
 		return () => console.log('🧹 cleanup')
 	})
 </script>
 
 <button onclick={() => count++}>
-	{count}
+	{double}
 </button>
 ```
 
-**You should never use effects to synchronize state** because Svelte queues effects and runs them last after the code ran and everything is updated.
+{% warning text="You can use the [$inspect](https://svelte.dev/docs/svelte/$inspect) rune instead of effects to log when a reactive value updates." %}
+
+**You should never use effects for updating state** because Svelte queues effects and runs them after everything is updated.
+
+Here's an example how using effects to synchronize state can cause unexpected behavior:
+
+```svelte:app.svelte
+<script>
+	let count = $state(0)
+	let double = $state(0)
+
+	$effect(() => {
+		// `double` is updated after we log `double`
+		double = count * 2
+	})
+</script>
+
+<button onclick={() => {
+	count++
+	console.log(double) // ⚠️ out of sync
+}}>
+	{double}
+</button>
+```
+
+**Always derive your state** using the `$derived` rune when you can and reach for the `$effect` rune sparingly:
+
+```svelte:app.svelte
+<script>
+	let count = $state(0)
+	let double = $derived(count * 2)
+</script>
+
+<button onclick={() => {
+	count++
+	console.log(double) // 👍️ latest value
+}}>
+	{double}
+</button>
+```
+
+{% warning text="Derived values are effects under the hood, but they rerun immediately when their dependencies change." %}
 
 Effects should only be used for side-effects like fetching data from an API, working with the DOM directly, or to synchronize with an external system that doesn't understand Svelte's reactivity:
 
@@ -231,17 +274,20 @@ Effects should only be used for side-effects like fetching data from an API, wor
 	let pokemon = $state()
 
 	$effect(() => {
-		const cache = JSON.deserialize(localStorage.getItem('pokemon'))
+		const cache = JSON.parse(localStorage.getItem('pokemon'))
+
 		if (!cache) {
-			fetch('https://pokeapi.co/api/v2/')
-				.then(response => pokemon = response.json())
+			// fetching data from an API
+			fetch('https://pokeapi.co/api/v2/pokemon')
+				.then((response) => response.json())
+				.then((data) => {
+					// sync with an external system
+					pokemon = data
+					localStorage.setItem('pokemon', JSON.stringify(data))
+				})
 		} else {
 			pokemon = cache
 		}
-	})
-
-	$effect(() => {
-		localStorage.setItem('pokemon', JSON.stringify(pokemon))
 	})
 </script>
 
@@ -250,15 +296,13 @@ Effects should only be used for side-effects like fetching data from an API, wor
 
 ## Template Logic
 
-Since HTML can't express logic such as conditionals and loops you would have to write something like this using JavaScript.
+There are no conditionals and loops in HTML unless you're using a templating language, so you would handle that with JavaScript:
 
 ```svelte:app.html
 <script>
   let appElement = document.querySelector('#app')
 
-  let user = {
-	  loggedIn: false
-	}
+  let user = { loggedIn: false }
 
 	function toggle() {
 	  user.loggedIn = !user.loggedIn
@@ -286,13 +330,11 @@ Since HTML can't express logic such as conditionals and loops you would have to 
 <div id="app"></div>
 ```
 
-It doesn't look bad but I think we can do better. This is the same example using an `#if` block in Svelte.
+In Svelte, you can use the `#if` block to conditionally render content:
 
-```svelte:App.svelte {11-13, 15-17} showLineNumbers
+```svelte:app.svelte
 <script>
-	let user = {
-		loggedIn: false
-	}
+	let user = $state({ loggedIn: false })
 
 	function toggle() {
 		user.loggedIn = !user.loggedIn
@@ -300,38 +342,29 @@ It doesn't look bad but I think we can do better. This is the same example using
 </script>
 
 {#if user.loggedIn}
-  <button on:click={toggle}>Log out</button>
-{/if}
-
-{#if !user.loggedIn}
-  <button on:click={toggle}>Log in</button>
+  <button onclick={toggle}>Log out</button>
+{:else}
+	<button onclick={toggle}>Log in</button>
 {/if}
 ```
 
-Awesome, right? I want to emphasize how close Svelte is to HTML and I hope you're excited about it.
+To loop over a list of items in JavaScript, you would have to do something like this:
 
-There's more logic blocks like `#if`, `#each`, `#await`, and `#key` for you to play around with.
-
-This is using JavaScript to loop over a list of items and render them.
-
-```svelte:Example.html showLineNumbers
-<div id="app"></div>
-
+```svelte:app.html
 <script>
   let appElement = document.querySelector('#app')
 
 	let todos = [
-		{ id: 1, text: 'Todo 1', completed: true },
-		{ id: 2, text: 'Todo 2', completed: false },
-		{ id: 3, text: 'Todo 3', completed: false },
-		{ id: 4, text: 'Todo 4', completed: false },
+		{ id: 1, text: 'Todo 1', done: true },
+		{ id: 2, text: 'Todo 2', done: false },
+		{ id: 3, text: 'Todo 3', done: false },
+		{ id: 4, text: 'Todo 4', done: false },
 	]
 
 	let todosHtml = ''
 
 	for (let todo of todos) {
-    let checked = todo.completed ? 'checked' : null
-
+    let checked = todo.done ? 'checked' : null
 	  todosHtml += `
       <li data-id=${todo.id}>
 		    <input ${checked} type="checkbox" />
@@ -342,104 +375,152 @@ This is using JavaScript to loop over a list of items and render them.
 
 	appElement.innerHTML = `<ul>${todosHtml}</ul>`
 </script>
+
+<div id="app"></div>
 ```
 
-The same example using `#each` in Svelte.
+In Svelte, you can loop over a list of items using the `#each` block:
 
-```svelte:App.svelte {11-16} showLineNumbers
+```svelte:app.svelte
 <script>
 	let todos = [
-		{ id: 1, text: 'Todo 1', completed: true },
-		{ id: 2, text: 'Todo 2', completed: false },
-		{ id: 3, text: 'Todo 3', completed: false },
-		{ id: 4, text: 'Todo 4', completed: false },
+		{ id: 1, text: 'Todo 1', done: true },
+		{ id: 2, text: 'Todo 2', done: false },
+		{ id: 3, text: 'Todo 3', done: false },
+		{ id: 4, text: 'Todo 4', done: false },
 	]
 </script>
 
 <ul>
-{#each todos as todo}
-  <li>
-		<input checked={todo.completed} type="checkbox" />
-		<span>{todo.text}</span>
-	</li>
-{/each}
+	{#each todos as todo}
+		<li>
+			<input checked={todo.done} type="checkbox" />
+			<span>{todo.text}</span>
+		</li>
+	{/each}
 </ul>
 ```
 
-You can [destructure](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Destructuring_assignment) values from the item you're iterating over, get the index, and provide a key so Svelte can keep track of changes. **Avoid using the index as the key** because it's not guaranteed to be unique so use a unique value instead.
+You can [destructure](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Destructuring_assignment) the items values you're iterating over, get the current item index and provide a key, so Svelte can keep track of changes:
 
-```svelte:App.svelte {2} showLineNumbers
+```svelte:app.svelte
 <ul>
-{#each todos as {id, text, completed}, index (id)}
-  <li>
-		<input checked={completed} type="checkbox" />
-		<span>{text}</span>
-	</li>
-{/each}
+	{#each todos as { id, text, done }, index (id)}
+		<li>
+			<input checked={done} type="checkbox" />
+			<span>{text}</span>
+		</li>
+	{/each}
 </ul>
 ```
 
-If you're fetching data on the client this is how it would look using JavaScript.
+Sometimes you just want to create an arbitrary amount of items like a grid, so you can ignore the `as` part. Here's an example of a 10x10 grid:
 
-```svelte:Example.html showLineNumbers
-<div id="app"></div>
+```svelte:app.svelte
+<div class="grid">
+  {#each { length: 10 }, row}
+    {#each { length: 10 }, col}
+      <div class="cell">{row},{col}</div>
+    {/each}
+  {/each}
+</div>
 
+<style>
+  .grid {
+		max-width: 400px;
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 0.5rem;
+  }
+
+  .cell {
+    padding: 1rem;
+    border: 1px solid #ccc;
+  }
+</style>
+```
+
+How about fetching data on the client? This is how it would look using JavaScript:
+
+```svelte:app.html
 <script>
   let appElement = document.querySelector('#app')
 
-  async function fetchPokemon(pokemonName) {
-    let url = `https://pokeapi.co/api/v2/pokemon/`
-    let response = await fetch(`${url}${pokemonName}`)
+  async function getPokemon(name) {
+    let response = await fetch(`https://pokeapi.co/api/v2/pokemon/${name}`)
     let { name, sprites } = await response.json()
-
-    return {
-      name,
-      image: sprites['front_default']
-    }
+		return { name, image: sprites['front_default'] }
   }
 
   async function renderUI() {
-    let { name, image } = await fetchPokemon('pikachu')
+    let pokemon = await getPokemon('charizard')
 
     appElement.innerHTML = `
-      <h1>${name}</h1>
-      <img src=${image} alt=${name} />
+      <h1>${pokemon.name}</h1>
+      <img src=${pokemon.image} alt=${pokemon.name} />
     `
   }
 
   renderUI()
 </script>
+
+<div id="app"></div>
 ```
 
-In Svelte you can easily resolve a promise using the `#await` block but you can also resolve the promise in the `<script>` tag if you want .
+In a previous example we fetched the Pokemon data inside of an effect. That approach works, but we haven't handled any of the the error and success states which quickly becomes a mess.
 
-```svelte:App.svelte {14-21} showLineNumbers
+Thankfully, Svelte has a built-in solution for async data loading using the `#await` block:
+
+```svelte:app.svelte
 <script>
-  async function fetchPokemon(pokemonName) {
-    let url = `https://pokeapi.co/api/v2/pokemon/`
-    let response = await fetch(`${url}${pokemonName}`)
+  async function getPokemon(name) {
+    let response = await fetch(`https://pokeapi.co/api/v2/pokemon/${name}`)
     let { name, sprites } = await response.json()
-
-		 return {
-      name,
-      image: sprites['front_default']
-    }
+		return { name, image: sprites['front_default'] }
   }
 </script>
 
-{#await fetchPokemon('pikachu')}
-	<p>Fetching Pokemon...</p>
+{#await getPokemon('charizard')}
+	<p>Loading...</p>
 {:then pokemon}
-	<h1>{pokemon.name}</h1>
+	<p>{pokemon.name}</p>
 	<img src={pokemon.image} alt={pokemon.name} />
 {:catch error}
-	<p>Something went wrong: {error.message}</p>
+	<p>{error.message}</p>
 {/await}
 ```
 
-In the JavaScript example we didn't even add checks for scenarios where the promise could be pending, fulfilled, or rejected and just hope it works. 😬 Using Svelte you don't have to think about it.
+In the near future you're going to be able to use the `await` keyword directly in the `<script>` tag, inside a `$derived` expression, and in your markup. You can try it today by enabling the [experimental async flag](https://github.com/sveltejs/svelte/discussions/15845) in your Svelte config:
 
-## Events
+```ts:svelte.config.js
+export default {
+  compilerOptions: {
+    experimental: {
+      async: true
+    }
+  }
+}
+```
+
+At the moment you have to create a Svelte boundary which you can put at the root of your app, or where you want to use the `await` keyword:
+
+```svelte:app.svelte
+<script>
+	import { getPokemon } from 'api/pokemon'
+	let pokemon = getPokemon('charizard')
+</script>
+
+<svelte:boundary>
+	{#snippet pending()}
+		<p>Loading...</p>
+	{/snippet}
+
+	<p>{(await pokemon).name}</p>
+	<img src={(await pokemon).image} alt={(await pokemon).name} />
+</svelte:boundary>
+```
+
+## Handling Events
 
 If you're new to JavaScript frameworks you might be confused by the use of **inline event handlers** because so far everyone told you to avoid doing so in JavaScript. That's for a good reason because of **separation of concerns** to have our markup, styles, and logic separate which makes it easy to change and maintain.
 

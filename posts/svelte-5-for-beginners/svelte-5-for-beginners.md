@@ -714,13 +714,12 @@ To receive props we use the `$props` rune. Here we bind the input value to the `
 ```diff:todos.svelte
 <script>
 +	import AddTodo from './AddTodo.svelte'
-	// ...
 </script>
 
 + <AddTodo bind:todo {addTodo} />
 ```
 
-In reality, you don't have to do this and I just wanted to show you how to use `$bindable` if you have to. In this case, we can move the `todo` state inside the component:
+In reality, you don't have to do this and I just wanted to show you how to use `$bindable` if you have to. In this case, we can move the `todo` state inside the component for adding todos:
 
 ```diff:todos.svelte
 <script>
@@ -800,7 +799,7 @@ Now we can create the component that filters the todos:
 + <TodoFilter {remaining} {setFilter} {clearCompleted} />
 ```
 
-I left the component that handles the todo item for last to show you the downside of abusing bind:
+I left the todo item component for last to show you the downside of abusing bind:
 
 ```svelte:todoItem.svelte
 <script>
@@ -816,17 +815,18 @@ I left the component that handles the todo item for last to show you the downsid
 </li>
 ```
 
-```svelte:todoItem.svelte
+```diff:todoItem.svelte
 <script>
 	import TodoItem from './TodoItem.svelte'
 
-	let { todos = $bindable(), removeTodo } = $props()
+-	let { todos, removeTodo } = $props()
++	let { todos = $bindable(), removeTodo } = $props()
 </script>
 
 <ul>
 	{#each todos as todo, i (todo.id)}
 		<li transition:slide>
-			<TodoItem bind:todo={todos[i]} {removeTodo} />
++			<TodoItem bind:todo={todos[i]} {removeTodo} />
 		</li>
 	{/each}
 </ul>

@@ -202,7 +202,7 @@ The `$derived` rune only accepts an expression by default, but you can use the `
 
 Derived values are lazy evaluted. The derived value only updates when it changes and not when their dependencies change.
 
-The last rune you should know about is the `$effect` rune. Effects are functions that run when the component mounts and when their dependencies change. You can also return a function from an effect which reruns when the effect dependencies change, or when the component unmounts.
+The last rune you should know about is the `$effect` rune. Effects are functions that run when the component is added (mounted) and when their dependencies change. You can also return a function from an effect which reruns when the effect dependencies change, or when the component removed (unmounted).
 
 **Effects don't need a dependency array** because of how signals work — if a reactive value is read inside of an effect, it will be tracked and the effect will rerun when the tracked value changes:
 
@@ -214,7 +214,7 @@ The last rune you should know about is the `$effect` rune. Effects are functions
 	$effect(() => {
 		// reruns if `count` or `double` changes
 		console.log({ count, double })
-		// also runs when the component unmounts
+		// also runs when the component is removed
 		return () => console.log('🧹 cleanup')
 	})
 </script>
@@ -274,9 +274,9 @@ Effects should only be used for side-effects like fetching data from an API, wor
 	let pokemon = $state()
 
 	$effect(() => {
-		const cache = JSON.parse(localStorage.getItem('pokemon'))
+		const savedPokemon = localStorage.getItem('pokemon')
 
-		if (!cache) {
+		if (!savedPokemon) {
 			// fetching data from an API
 			fetch('https://pokeapi.co/api/v2/pokemon')
 				.then((response) => response.json())
@@ -286,7 +286,7 @@ Effects should only be used for side-effects like fetching data from an API, wor
 					localStorage.setItem('pokemon', JSON.stringify(data))
 				})
 		} else {
-			pokemon = cache
+			pokemon = JSON.parse(savedPokemon)
 		}
 	})
 </script>
@@ -427,7 +427,7 @@ At the moment you have to create a [boundary](https://svelte.dev/docs/svelte/sve
 
 <svelte:boundary>
 	{#snippet pending()}
-		<!-- this only shows when the component mounts -->
+		<!-- this only shows when the component is added -->
 		<p>loading...</p>
 	{/snippet}
 
@@ -571,7 +571,7 @@ One of the more useful bindings is `bind:this` to get a reference to a DOM node 
 
 ```svelte:app.svelte
 <script>
-	// `undefined` until the component mounts
+	// `undefined` until the component is added
 	let canvas
 
 	$effect(() => {
@@ -591,7 +591,7 @@ Another useful thing to know about are **function bindings** when you need to do
 ```svelte:app.svelte
 <script>
  	let celsius = $state(0)
- 	let fahrenheit = $state(0)
+ 	let fahrenheit = $state(32)
 </script>
 
 <input bind:value={
@@ -619,139 +619,343 @@ You can think of components as reusable lego blocks that can include the markup,
 
 A Svelte component is a file that ends with the `.svelte` extension.
 
-It might be tempting, but **avoid creating components**. If you're not sure what to turn into a component — don't. Instead, write everything inside a single component until it becomes obvious what which parts warrant their own component, either for reusability, or to make it easier to reason about.
+In my opinion, **you should avoid creating components**. If you're not sure what to turn into a component — don't. Instead, write everything inside a single component until it gets complicated, or the reusable parts become obvious.
 
-You might have an `<Artist />` component:
+Let's use a basic todo app as an example:
 
-- `<Artist />` components gets passed the `artistName` property
-- `<Album />` component has `albumTitle` and `albumTracks` property passed to `<AlbumTrack />`
-- `<AlbumTrack />` component has `track` and `length` properties but also a `playing` state
-
-The filename can be whatever but a capitalised tag such as `<Artist />` indicates to Svelte that something is a component. You import another Svelte component using the `import Component as './Component'` syntax.
-
-Pretend that `artists` is some data we fetched as a JSON response from the Spotify API.
-
-```svelte:App.svelte {2, 3} showLineNumbers
+```svelte:todos.svelte
 <script>
-	import Artist from './Artist.svelte'
-	import Album from './Album.svelte'
+	import { slide } from 'svelte/transition'
 
-	let artists = [
-		{
-			name: 'Fleetwood Mac',
-			albums: [
-				{
-					name: 'Tango in the Night',
-					year: 1987,
-					tracks: [
-						{ title: 'Big Love', length: '3:37' },
-						{ title: 'Seven Wonders', length: '3:38' },
-						{ title: 'Everywhere', length: '3:48' },
-						{ title: 'Caroline', length: '3:50' },
-						{ title: 'Tango in the Night', length: '3:56' },
-						{ title: 'Mystified', length: '3:08' },
-					],
-				},
-			],
-		},
-	]
-</script>
+	let todo = $state('')
+	let todos = $state([])
+	let filter = $state('all')
+	let filteredTodos = $derived(filterTodos())
+	let remaining = $derived(remainingTodos())
 
-{#each artists as artist}
-  <Artist artistName={artist.name} />
-  {#each artist.albums as album}
-		<Album
-			albumTitle={album.name}
-			albumTracks={album.tracks}
-		/>
-  {/each}
-{/each}
-```
+	function addTodo(event: KeyboardEvent) {
+		if (event.key !== 'Enter') return
+		todos.push({
+			id: crypto.randomUUID(),
+			text: todo,
+			completed: false
+		})
+	}
 
-The `<Artist />` component takes an `artistName` prop. To define something as a prop that's passed in to your component you use the `export let prop` syntax. You can define multiple props on the same line such as `export let prop1, prop2`.
+	function removeTodo(todo) {
+		todos = todos.filter((t) => t.id !== todo.id)
+	}
 
-```svelte:Artist.svelte {2, 5} showLineNumbers
-<script>
-	export let artistName
-</script>
+	function filterTodos() {
+		return todos.filter((todo) => {
+			if (filter === 'all') return true
+			if (filter === 'active') return !todo.completed
+			if (filter === 'completed') return todo.completed
+		})
+	}
 
-<h1>{artistName}</h1>
-```
+	function setFilter(newFilter) {
+		filter = newFilter
+	}
 
-The `<Album />` component imports `<AlbumTrack />` and loops over the tracks. The `{...track}` syntax is just spreading the `track` props which is equivalent to `title={title} length={length}`. If your props share the same name as the value you can do `{title} {length}`.
+	function remainingTodos() {
+		return todos.filter((todo) => !todo.completed).length
+	}
 
-```svelte:Album.svelte {2, 18} showLineNumbers
-<script>
-	import AlbumTrack from './AlbumTrack.svelte'
-
-	export let albumTitle
-	export let albumTracks
-
-	let playing
-
-	function setPlaying(track) {
-		playing = track
+	function clearCompleted() {
+		todos = todos.filter((todo) => !todo.completed)
 	}
 </script>
 
-<h2>{albumTitle}</h2>
+<input type="text" onkeydown={addTodo} bind:value={todo} />
 
 <ul>
-  {#each albumTracks as track}
-    <AlbumTrack {setPlaying} {playing} {...track} />
-  {/each}
+	{#each filteredTodos as todo (todo.id)}
+		<li transition:slide>
+			<input type="checkbox" bind:checked={todo.completed} />
+			<input type="text" bind:value={todo.text} />
+			<button onclick={() => removeTodo(todo)}>🗙</button>
+		</li>
+	{/each}
+</ul>
+
+<div>
+	<p>{remaining} {remaining === 1 ? 'item' : 'items'} left</p>
+
+	{#each ['all', 'active', 'completed'] as filter}
+		<button onclick={() => setFilter(filter)}>{filter}</button>
+	{/each}
+
+	<button onclick={clearCompleted}>Clear completed</button>
+</div>
+```
+
+Let's take the contents of the `Todos.svelte` file and break it into multiple components. You can keep everything organized and place the files inside a `todos` folder:
+
+- `Todos.svelte`
+- `AddTodo.svelte`
+- `TodoList.svelte`
+- `TodoFilter.svelte`
+
+The way Svelte knows something is a component is by a capitalized tag such as `<Component>`, or dot notation like `<my.component>`. How you name the file is irrelevant. Most often you're going to see PascalCase, but I vibe most with camelCase for the component name.
+
+First we'll create the component that handles adding a new todo:
+
+```svelte:addTodo.svelte
+<script>
+	let { todo = $bindable(), addTodo } = $props()
+</script>
+
+<input type="text" onkeydown={addTodo} bind:value={todo} />
+```
+
+To receive props we use the `$props` rune. Here we bind the input value to the `todo` variable in the parent component, so we have to let Svelte know it's okay for the child to mutate the parent state by using the `$bindable` rune. You can now bind the prop:
+
+```diff:todos.svelte
+<script>
++	import AddTodo from './AddTodo.svelte'
+	// ...
+</script>
+
++ <AddTodo bind:todo {addTodo} />
+```
+
+In reality, you don't have to do this and I just wanted to show you how to use `$bindable` if you have to. In this case, we can move the `todo` state inside the component:
+
+```diff:todos.svelte
+<script>
+-	// let todo = $state('')
+</script>
+
+- <AddTodo {todo} {addTodo} />
++ <AddTodo {addTodo} />
+```
+
+```svelte:addTodo.svelte
+<script>
+	let { addTodo } = $props()
+	let todo = $state('')
+</script>
+
+<input type="text" onkeydown={addTodo} bind:value={todo} />
+```
+
+Let's create a component that renders the list of todos and spice it up with a built-in Svelte transition:
+
+```svelte:todoList.svelte
+<script lang="ts">
+	import { slide } from 'svelte/transition'
+
+	let { todos, removeTodo } = $props()
+</script>
+
+<ul>
+	{#each todos as todo, i (todo.id)}
+		<li transition:slide>
+			<input type="checkbox" bind:checked={todo.completed} />
+			<input type="text" bind:value={todo.text} />
+			<button onclick={() => removeTodo(todo.id)}>🗙</button>
+		</li>
+	{/each}
 </ul>
 ```
 
-We're passing `setPlaying` to the child component so we can set the currently playing song and check if `currentlyPlaying` is equal to the current track.
-
-The `<AlbumTrack />` component applies a `.playing` style using the `class:` directive based on what song is playing which is shorter than using a ternary inside an expression `class={playing === title ? 'playing' : ''}`.
-
-```svelte:AlbumTrack.svelte {3, 4, 8, 15-17} showLineNumbers
+```diff:todos.svelte
 <script>
-	export let setPlaying
-	export let playing
-  export let title
-	export let length
+	import AddTodo from './AddTodo.svelte'
++	import TodoList from './TodoList.svelte'
 </script>
 
-<li class:playing={playing === title}>
-	<button on:click={() => setPlaying(title)}>▶️</button>
-  <span>{title}</span>
-	<span>🕒️ {length}</span>
-</li>
-
-<style>
-	.playing {
-		color: teal;
-	}
-</style>
+<AddTodo {todo} {addTodo} />
++ <TodoList todos={filteredTodos} {removeTodo} />
 ```
 
-We can also use a reactive statement `$: playing = playing === title` for `playing` and since it matches the class name we want to apply we can simplify the code and write `class:playing`.
+Now we can create the component that filters the todos:
 
-```svelte:AlbumTrack.svelte {7, 10} showLineNumbers
+```svelte:todoFilter.svelte
 <script>
-	export let setPlaying
-	export let playing
-  export let title
-	export let length
-
-	$: playing = playing === title
+	let { remaining, setFilter, clearCompleted } = $props()
 </script>
 
-<li class:playing>
-	<button on:click={() => setPlaying(title)}>▶️</button>
-  <span>{title}</span>
-	<span>🕒️ {length}</span>
-</li>
+<div>
+	<p>{remaining} {remaining === 1 ? 'item' : 'items'} left</p>
 
-<style>
-	.playing {
-		color: teal;
-	}
-</style>
+	{#each ['all', 'active', 'completed'] as filter}
+		<button onclick={() => setFilter(filter)}>{filter}</button>
+	{/each}
+
+	<button onclick={clearCompleted}>Clear completed</button>
+</div>
 ```
+
+```diff:todos.svelte
+<script>
+	import AddTodo from './AddTodo.svelte'
+	import TodoList from './TodoList.svelte'
++	import TodoFilter from './TodoFilter.svelte'
+</script>
+
+<AddTodo {todo} {addTodo} />
+<TodoList todos={filteredTodos} {removeTodo} />
++ <TodoFilter {remaining} {setFilter} {clearCompleted} />
+```
+
+I left the component that handles the todo item for last to show you the downside of abusing bind:
+
+```svelte:todoItem.svelte
+<script>
+	import { slide } from 'svelte/transition'
+
+	let { todo = $bindable(), removeTodo } = $props()
+</script>
+
+<li transition:slide>
+	<input type="checkbox" bind:checked={todo.completed} />
+	<input type="text" bind:value={todo.text} />
+	<button onclick={() => removeTodo(todo.id)}>🗙</button>
+</li>
+```
+
+```svelte:todoItem.svelte
+<script>
+	import TodoItem from './TodoItem.svelte'
+
+	let { todos = $bindable(), removeTodo } = $props()
+</script>
+
+<ul>
+	{#each todos as todo, i (todo.id)}
+		<li transition:slide>
+			<TodoItem bind:todo={todos[i]} {removeTodo} />
+		</li>
+	{/each}
+</ul>
+```
+
+```diff:todos.svelte
+<script>
+	import AddTodo from './AddTodo.svelte'
+	import TodoList from './TodoList.svelte'
+	import TodoFilter from './TodoFilter.svelte'
+</script>
+
+<AddTodo {todo} {addTodo} />
+- <TodoList todos={filteredTodos} {removeTodo} />
++ <TodoList bind:todos={filteredTodos} {removeTodo} />
+	<TodoFilter {remaining} {setFilter} {clearCompleted} />
+```
+
+This works, but Svelte is going to throw a bunch of warnings because you're mutating `todos` in the parent state, so now we have to make `todos` bindable.
+
+In general, you should avoid mutating props to avoid confusion. If you want to update a value, callback props are a better option. Let's change the todos component to show you what I mean:
+
+```svelte:todos.svelte
+<script>
+	import AddTodo from './AddTodo.svelte'
+	import TodoList from './TodoList.svelte'
+	import TodoFilter from './TodoFilter.svelte'
+
+	let todos = $state([])
+	let filter: Filters = $state('all')
+	let filteredTodos = $derived(filterTodos())
+	let remaining = $derived(remainingTodos())
+
+	function addTodo(event: KeyboardEvent) {
+		if (event.key !== 'Enter') return
+		todos.push({
+			id: crypto.randomUUID(),
+			text: event.currentTarget,
+			completed: false
+		})
+	}
+
+	function toggleTodo(todo: Todo) {
+		const index = todos.findIndex((t) => t.id === todo.id)
+		todos[index].completed = !todos[index].completed
+	}
+
+	function updateTodo(todo: Todo) {
+		const index = todos.findIndex((t) => t.id === todo.id)
+		todos[index].text = todo.text
+	}
+
+	function removeTodo(todo: Todo) {
+		todos = todos.filter((t) => t.id !== todo.id)
+	}
+
+	function remainingTodos() {
+		return todos.filter((todo) => !todo.completed).length
+	}
+
+	function filterTodos() {
+		return todos.filter((todo) => {
+			if (filter === 'all') return true
+			if (filter === 'active') return !todo.completed
+			if (filter === 'completed') return todo.completed
+		})
+	}
+
+	function setFilter(newFilter: Filters) {
+		filter = newFilter
+	}
+
+	function clearCompleted() {
+		todos = todos.filter((todo) => !todo.completed)
+	}
+</script>
+
+<AddTodo {addTodo} />
+<TodoList todos={filteredTodos} {toggleTodo} {updateTodo} {removeTodo} />
+<TodoFilter {remaining} {setFilter} {clearCompleted} />
+```
+
+Let's update the guilty components to use callback props to update the todos instead of binding values that could lead to unpredictable behavior:
+
+```svelte:addTodo.svelte
+<script>
+	let { addTodo } = $props()
+</script>
+
+<input type="text" onkeydown={addTodo} />
+```
+
+```svelte:todoList.svelte
+<script>
+	import TodoItem from './TodoItem.svelte'
+
+	let { todos, toggleTodo, updateTodo, removeTodo } = $props()
+</script>
+
+<ul>
+	{#each todos as todo (todo.id)}
+		<TodoItem {todo} {toggleTodo} {updateTodo} {removeTodo} />
+	{/each}
+</ul>
+```
+
+```svelte:todoItem.svelte
+<script lang="ts">
+	import { slide } from 'svelte/transition'
+
+	let { todo, toggleTodo, updateTodo, removeTodo } = $props()
+</script>
+
+<li transition:slide>
+	<input
+		type="checkbox"
+		onchange={() => toggleTodo(todo)}
+		checked={todo.completed}
+	/>
+	<input
+		type="text"
+		oninput={() => updateTodo(todo)}
+		bind:value={todo.text}
+		/>
+	<button onclick={() => removeTodo(todo)}>🗙</button>
+</li>
+```
+
+There are more ways to do this, but I'm going to leave it here for now. Later we're going to learn how to talk between components without props, using the context API.
 
 ## Slots
 
@@ -865,6 +1069,8 @@ You can specify a enter animation with `in:fade` and exit animation with `out:fa
 In Svelte you can define custom animations such as this [typewriter effect](https://learn.svelte.dev/tutorial/custom-js-transitions), use [spring and tweened motion](https://learn.svelte.dev/tutorial/tweens) and make smooth transitions between elements using [flip animations](https://learn.svelte.dev/tutorial/animate).
 
 ## Svelte Store
+
+TODO: universal reactivity
 
 Passing data from parent to child component is described as **data flowing top to bottom** but Svelte lets you **reverse** the flow using **bindings**, **event forwarding** and the **context API** which you don't have to know right now because passing props is fine in most cases where you don't have deeply nested components.
 

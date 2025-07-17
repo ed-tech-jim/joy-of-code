@@ -971,88 +971,24 @@ As a cherry on top, let's save the todos in local storage:
 
 There are more ways to do this, but I'm going to leave it here for now. Later we're going to learn how to talk between components without props, using the context API.
 
-## Slots
+## Creating Composable Components In Svelte
 
-TODO: component composition
+Svelte enables composition through components and snippets which let you create reusable markup in your component — you can also communicate between components without using props or events, using the context API.
 
-**In Svelte we can use slots to compose components** meaning our components can contain other components and elements to be more reusable like regular HTML.
+Let's take an accordion for example:
 
-```svelte:Example.html showLineNumbers
-<button>
-	<span>Child</span>
-</button>
-```
-
-The `<slot>` element lets us do that with components. If you're familiar with React this is similar to the `children` prop and Vue also has slots. We can provide a **fallback** if no content is provided.
-
-```svelte:Button.svelte {2} showLineNumbers
-<button>
-  <slot>Placeholder</slot>
-</button>
-
-<style>
-	button {
-		color: teal;
-	}
-</style>
-```
-
-```svelte:App.svelte {2, 6} showLineNumbers
+```svelte:accordion.svelte
 <script>
-	import Button from './Button.svelte'
+	import { Accordion, AccordionItem } from './Accordion.svelte'
 </script>
 
-<Button>
-  <span>Child</span>
-</Button>
-
-<Button />
+<Accordion>
+	<AccordionItem>1</AccordionItem>
+	<AccordionItem>2</AccordionItem>
+	<AccordionItem>3</AccordionItem>
+	<AccordionItem>3</AccordionItem>
+</Accordion>
 ```
-
-You can use **named slots** for more control over the placement of elements. If you want multiple elements going into the same slot use the `<svelte:fragment>` element as the wrapper.
-
-```svelte:Button.svelte {2-3} showLineNumbers
-<button>
-	<slot name="icon"></slot>
-	<slot name="text"></slot>
-</button>
-```
-
-```svelte:App.svelte {6-7, 11-12} showLineNumbers
-<script>
-	import Button from './Button.svelte'
-</script>
-
-<Button>
-  <span slot="icon">➕</span>
-	<span slot="text">Add</span>
-</Button>
-
-<Button>
-  <span slot="icon">💩</span>
-	<span slot="text">Delete</span>
-</Button>
-```
-
-You might be asking when you'd use slots over regular components and the answer might be not often and that's fine.
-
-Here's an example of slots and composition used in a real-world scenario in [Svelte Cubed](https://svelte-cubed.vercel.app/) that's a wrapper around [Three.js](https://threejs.org/) so you write less code because it's more declarative:
-
-```svelte:Example.svelte
-<script>
-	import * as SC from 'svelte-cubed';
-	import * as THREE from 'three';
-</script>
-
-<SC.Canvas>
-	<SC.Mesh geometry={new THREE.BoxGeometry()} />
-	<SC.PerspectiveCamera position={[1, 1, 3]} />
-</SC.Canvas>
-```
-
-This is only a couple of lines of code compared to the equivalent Three.js code which has more than 20 lines of code and it's harder to read.
-
-There's a lot more you can do with slot props but I encourage you to [read the slots documentation](https://svelte.dev/docs#template-syntax-slot) because slots deserve their separate post.
 
 ## Transitions
 

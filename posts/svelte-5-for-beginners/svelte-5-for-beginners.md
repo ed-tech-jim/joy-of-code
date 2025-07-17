@@ -487,9 +487,9 @@ Here's an example of using the `onmousemove` event to update the mouse position:
 <script>
 	let mouse = $state({ x: 0, y: 0 })
 
-	function onmousemove(event) {
-		mouse.x = event.clientX
-		mouse.y = event.clientY
+	function onmousemove(e) {
+		mouse.x = e.clientX
+		mouse.y = e.clientY
 	}
 </script>
 
@@ -498,14 +498,14 @@ Here's an example of using the `onmousemove` event to update the mouse position:
 </div>
 ```
 
-The `event` is automatically passed to the function, so you don't have to do `onmousemove={(event) => onmousemove(event)}`.
+The `event` is automatically passed to the function, so you don't have to do `onmousemove={(e) => onmousemove(e)}`.
 
-You can also prevent default behavior by using `event.preventDefault()`. This is useful when you want to control a form with JavaScript and avoid a page reload:
+You can also prevent default behavior by using `e.preventDefault()`. This is useful when you want to control a form with JavaScript and avoid a page reload:
 
 ```svelte:app.svelte
 <script>
-	function onsubmit(event) {
-		event.preventDefault()
+	function onsubmit(e) {
+		e.preventDefault()
 		// sign up to newsletter
 	}
 </script>
@@ -633,13 +633,14 @@ Let's use a basic todo app as an example:
 	let filteredTodos = $derived(filterTodos())
 	let remaining = $derived(remainingTodos())
 
-	function addTodo(event: KeyboardEvent) {
-		if (event.key !== 'Enter') return
+	function addTodo(e) {
+		e.preventDefault()
 		todos.push({
 			id: crypto.randomUUID(),
 			text: todo,
 			completed: false
 		})
+		todo = ''
 	}
 
 	function removeTodo(todo) {
@@ -667,7 +668,9 @@ Let's use a basic todo app as an example:
 	}
 </script>
 
-<input type="text" onkeydown={addTodo} bind:value={todo} />
+<form onsubmit={addTodo}>
+	<input type="text" bind:value={todo} />
+</form>
 
 <ul>
 	{#each filteredTodos as todo (todo.id)}
@@ -697,7 +700,7 @@ Let's take the contents of the `Todos.svelte` file and break it into multiple co
 - `TodoList.svelte`
 - `TodoFilter.svelte`
 
-The way Svelte knows something is a component is by a capitalized tag such as `<Component>`, or dot notation like `<my.component>`. How you name the file is irrelevant. Most often you're going to see PascalCase, but I vibe most with camelCase for the component name.
+The way Svelte knows something is a component is by a capitalized tag such as `<Component>`, or dot notation like `<my.component>`. How you name the file is irrelevant. Most often you're going to see PascalCase, but I vibe with camelCase for the component name.
 
 First we'll create the component that handles adding a new todo:
 
@@ -706,10 +709,12 @@ First we'll create the component that handles adding a new todo:
 	let { todo = $bindable(), addTodo } = $props()
 </script>
 
-<input type="text" onkeydown={addTodo} bind:value={todo} />
+<form onsubmit={addTodo}>
+	<input type="text" bind:value={todo} />
+</form>
 ```
 
-To receive props we use the `$props` rune. Here we bind the input value to the `todo` variable in the parent component, so we have to let Svelte know it's okay for the child to mutate the parent state by using the `$bindable` rune. You can now bind the prop:
+To receive and destructure props we use the `$props` rune. Here we bind the input value to the `todo` variable in the parent component, so we have to let Svelte know it's okay for the child to mutate the parent state by using the `$bindable` rune. You can now bind the `todo` prop:
 
 ```diff:todos.svelte
 <script>
@@ -719,11 +724,22 @@ To receive props we use the `$props` rune. Here we bind the input value to the `
 + <AddTodo bind:todo {addTodo} />
 ```
 
-In reality, you don't have to do this and I just wanted to show you how to use `$bindable` if you have to. In this case, we can move the `todo` state inside the component for adding todos:
+In reality, you don't have to do this. I just wanted to demonstrate how to use the `$bindable` rune if you have to. It makes more sense to move the `todo` state inside the component for adding todos:
 
 ```diff:todos.svelte
 <script>
--	// let todo = $state('')
+-	let todo = $state('')
+
+-	function addTodo(e) {
++	function addTodo(todo) {
+-		e.preventDefault()
+		todos.push({
+			id: crypto.randomUUID(),
+			text: todo,
+			completed: false
+		})
+-		todo = ''
+}
 </script>
 
 - <AddTodo {todo} {addTodo} />
@@ -734,10 +750,20 @@ In reality, you don't have to do this and I just wanted to show you how to use `
 <script>
 	let { addTodo } = $props()
 	let todo = $state('')
+
+	function onsubmit(e) {
+		e.preventDefault()
+		addTodo(todo)
+		todo = ''
+	}
 </script>
 
-<input type="text" onkeydown={addTodo} bind:value={todo} />
+<form {onsubmit}>
+	<input type="text" bind:value={todo} />
+</form>
 ```
+
+I'm mostly using a form because you can just press enter to submit. Instead of binding the value, you can get the value from the form `onsubmit` event. Later in this section, I'm going to show you what to do instead.
 
 Let's create a component that renders the list of todos and spice it up with a built-in Svelte transition:
 
@@ -815,6 +841,21 @@ I left the todo item component for last to show you the downside of abusing bind
 </li>
 ```
 
+This works, but Svelte is going to throw a bunch of warnings because you're mutating `todos` in the parent state, so now we have to make `todos` bindable:
+
+```diff:todos.svelte
+<script>
+	import AddTodo from './AddTodo.svelte'
+	import TodoList from './TodoList.svelte'
+	import TodoFilter from './TodoFilter.svelte'
+</script>
+
+<AddTodo {todo} {addTodo} />
+- <TodoList todos={filteredTodos} {removeTodo} />
++ <TodoList bind:todos={filteredTodos} {removeTodo} />
+<TodoFilter {remaining} {setFilter} {clearCompleted} />
+```
+
 ```diff:todoItem.svelte
 <script>
 	import TodoItem from './TodoItem.svelte'
@@ -832,91 +873,49 @@ I left the todo item component for last to show you the downside of abusing bind
 </ul>
 ```
 
+In general, avoid mutating props to avoid unexpected state changes. If you want to update a value from a child component, callback props are a better option. Let's change the todos component to show you what I mean:
+
 ```diff:todos.svelte
 <script>
-	import AddTodo from './AddTodo.svelte'
-	import TodoList from './TodoList.svelte'
-	import TodoFilter from './TodoFilter.svelte'
+function addTodo(e) {
++	e.preventDefault()
++	const form = e.currentTarget
++	const formData = new FormData(form)
+	todos.push({
+		id: crypto.randomUUID(),
+-		text: todo,
++		text: formData.get('todo'),
+		completed: false
+	})
++	form.reset()
+}
+
++	function toggleTodo(todo: Todo) {
++		const index = todos.findIndex((t) => t.id === todo.id)
++		todos[index].completed = !todos[index].completed
++	}
+
++	function updateTodo(todo: Todo) {
++		const index = todos.findIndex((t) => t.id === todo.id)
++		todos[index].text = todo.text
++	}
 </script>
 
-<AddTodo {todo} {addTodo} />
-- <TodoList todos={filteredTodos} {removeTodo} />
-+ <TodoList bind:todos={filteredTodos} {removeTodo} />
-	<TodoFilter {remaining} {setFilter} {clearCompleted} />
++ <AddTodo {addTodo} />
++ <TodoList todos={filteredTodos} {toggleTodo} {updateTodo} {removeTodo} />
++ <TodoFilter {remaining} {setFilter} {clearCompleted} />
 ```
 
-This works, but Svelte is going to throw a bunch of warnings because you're mutating `todos` in the parent state, so now we have to make `todos` bindable.
-
-In general, you should avoid mutating props to avoid confusion. If you want to update a value, callback props are a better option. Let's change the todos component to show you what I mean:
-
-```svelte:todos.svelte
-<script>
-	import AddTodo from './AddTodo.svelte'
-	import TodoList from './TodoList.svelte'
-	import TodoFilter from './TodoFilter.svelte'
-
-	let todos = $state([])
-	let filter: Filters = $state('all')
-	let filteredTodos = $derived(filterTodos())
-	let remaining = $derived(remainingTodos())
-
-	function addTodo(event: KeyboardEvent) {
-		if (event.key !== 'Enter') return
-		todos.push({
-			id: crypto.randomUUID(),
-			text: event.currentTarget,
-			completed: false
-		})
-	}
-
-	function toggleTodo(todo: Todo) {
-		const index = todos.findIndex((t) => t.id === todo.id)
-		todos[index].completed = !todos[index].completed
-	}
-
-	function updateTodo(todo: Todo) {
-		const index = todos.findIndex((t) => t.id === todo.id)
-		todos[index].text = todo.text
-	}
-
-	function removeTodo(todo: Todo) {
-		todos = todos.filter((t) => t.id !== todo.id)
-	}
-
-	function remainingTodos() {
-		return todos.filter((todo) => !todo.completed).length
-	}
-
-	function filterTodos() {
-		return todos.filter((todo) => {
-			if (filter === 'all') return true
-			if (filter === 'active') return !todo.completed
-			if (filter === 'completed') return todo.completed
-		})
-	}
-
-	function setFilter(newFilter: Filters) {
-		filter = newFilter
-	}
-
-	function clearCompleted() {
-		todos = todos.filter((todo) => !todo.completed)
-	}
-</script>
-
-<AddTodo {addTodo} />
-<TodoList todos={filteredTodos} {toggleTodo} {updateTodo} {removeTodo} />
-<TodoFilter {remaining} {setFilter} {clearCompleted} />
-```
-
-Let's update the guilty components to use callback props to update the todos instead of binding values that could lead to unpredictable behavior:
+Let's update the offending components to use callback props to update the todos instead of binding props everywhere, which could lead to unpredictable behavior:
 
 ```svelte:addTodo.svelte
 <script>
 	let { addTodo } = $props()
 </script>
 
-<input type="text" onkeydown={addTodo} />
+<form onsubmit={addTodo}>
+	<input type="text" name="todo" />
+</form>
 ```
 
 ```svelte:todoList.svelte
@@ -950,14 +949,31 @@ Let's update the guilty components to use callback props to update the todos ins
 		type="text"
 		oninput={() => updateTodo(todo)}
 		bind:value={todo.text}
-		/>
+	/>
 	<button onclick={() => removeTodo(todo)}>🗙</button>
 </li>
+```
+
+As a cherry on top, let's save the todos in local storage:
+
+```svelte:todos.svelte
+<script>
+	// ...
+	$effect(() => {
+		todos = JSON.parse(localStorage.getItem('todos') || '[]')
+	})
+
+	$effect(() => {
+		localStorage.setItem('todos', JSON.stringify(todos))
+	})
+</script>
 ```
 
 There are more ways to do this, but I'm going to leave it here for now. Later we're going to learn how to talk between components without props, using the context API.
 
 ## Slots
+
+TODO: component composition
 
 **In Svelte we can use slots to compose components** meaning our components can contain other components and elements to be more reusable like regular HTML.
 

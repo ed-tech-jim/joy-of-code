@@ -621,7 +621,7 @@ A Svelte component is a file that ends with the `.svelte` extension.
 
 In my opinion, **you should avoid creating components**. If you're not sure what to turn into a component — don't. Instead, write everything inside a single component until it gets complicated, or the reusable parts become obvious.
 
-Let's use a basic todo app as an example:
+Let's use a basic todo list app as an example:
 
 ```svelte:todos.svelte
 <script>
@@ -695,10 +695,14 @@ Let's use a basic todo app as an example:
 
 Let's take the contents of the `Todos.svelte` file and break it into multiple components. You can keep everything organized and place the files inside a `todos` folder:
 
-- `Todos.svelte`
-- `AddTodo.svelte`
-- `TodoList.svelte`
-- `TodoFilter.svelte`
+```console
+todos/
+├── Todos.svelte
+├── AddTodo.svelte
+├── TodoList.svelte
+├── TodoItem.svelte
+└── TodoFilter.svelte
+```
 
 The way Svelte knows something is a component is by a capitalized tag such as `<Component>`, or dot notation like `<my.component>`. How you name the file is irrelevant. Most often you're going to see PascalCase, but I vibe with camelCase for the component name.
 
@@ -971,26 +975,323 @@ As a cherry on top, let's save the todos in local storage:
 
 There are more ways to do this, but I'm going to leave it here for now. Later we're going to learn how to talk between components without props, using the context API.
 
-## Creating Composable Components In Svelte
+## Component Composition In Svelte
 
-Svelte enables composition through components and snippets which let you create reusable markup in your component — you can also communicate between components without using props or events, using the context API.
+You can compose components by nesting them, using snippets which hold content that can be passed as props to components similar to slots, and communicate between components with the context API without props or events.
 
-Let's take an accordion for example:
+Let's create an accordion component that has multiple accordion items. You can create these files inside an `accordion` folder:
 
-```svelte:accordion.svelte
+```console
+accordion/
+├── Accordion.svelte
+├── AccordionItem.svelte
+└── index.ts
+```
+
+Let's export the accordion components from the `index.ts` file:
+
+```ts:index.ts
+export { default as Accordion } from './Accordion.svelte'
+export { default as AccordionItem } from './AccordionItem.svelte'
+```
+
+In HTML, you can nest elements inside other elements:
+
+```html:accordion.html
+<div class="accordion">
+	<div class="accordion-item">
+		<button>
+			<div>Item A</div>
+			<div class="accordion-icon">👈️</div>
+		</button>
+		<div class="accordion-content">Content</div>
+	</div>
+</div>
+```
+
+The fun part is creating the API you want for your components and how you want to compose them. Here's one way how we can take the accordion HTML and turn it into a reusable component:
+
+```svelte:app.svelte
 <script>
-	import { Accordion, AccordionItem } from './Accordion.svelte'
+	import { Accordion, AccordionItem } from './accordion'
 </script>
 
 <Accordion>
-	<AccordionItem>1</AccordionItem>
-	<AccordionItem>2</AccordionItem>
-	<AccordionItem>3</AccordionItem>
-	<AccordionItem>3</AccordionItem>
+	<AccordionItem title="Item A">
+		Content
+	</AccordionItem>
 </Accordion>
 ```
 
-## Transitions
+Every component like the `<Accordion>` component has a `children` snippet prop you can render using the `@render` tag to render any children you pass to the component:
+
+```svelte:accordion.svelte
+<script>
+	let { children } = $props()
+</script>
+
+<div class="accordion">
+	<!-- using `if` block with a fallback -->
+	{#if children}
+		{@render children()}
+	{:else}
+		<p>Fallback content</p>
+	{/if}
+
+	<!-- using optional chaining -->
+	{@render children?.()}
+</div>
+```
+
+The `<AccordionItem>` is going to accept the `label` prop and render the content using the `children` snippet prop:
+
+```svelte:accordionItem.svelte
+<script>
+	let { label, children } = $props()
+
+	let open = $state(false)
+
+	function toggle() {
+		open = !open
+	}
+</script>
+
+<div class="accordion-item">
+	<button onclick={toggle} class="accordion-heading">
+		<div>{label}</div>
+		<div class="accordion-icon">👈️</div>
+	</button>
+
+	{#if open}
+		<div transition:slide class="accordion-content">
+			{@render children?.()}
+		</div>
+	{/if}
+</div>
+```
+
+That's it! You can now use the `<Accordion>` component in your app. That being said, this has limited composability. What do I mean by that? Let's say you don't like the icon, or position of the individual accordion elements. This could lead to an explosion of props:
+
+```svelte:app.svelte
+<script>
+	import { Accordion, AccordionItem } from './accordion'
+</script>
+
+<Accordion>
+	<AccordionItem title="Item A" icon="👈️" iconPosition="left">
+		Content
+	</AccordionItem>
+</Accordion>
+```
+
+That's not a way to live your life! Instead, you can use **inversion of control** so the user can render the accordion item however they want.
+
+Let's modify the `<AccordionItem>` component to accept an `accordionItem` snippet instead, and pass it the `open` state and `toggle` function:
+
+```svelte:accordionItem.svelte
+<script lang="ts">
+	let { accordionItem } = $props()
+
+	function toggle() {
+		open = !open
+	}
+</script>
+
+<div class="accordion-item">
+	{@render accordionItem?.({ open, toggle })}
+</div>
+```
+
+Snippets are just functions! You can define and render a snippet in your component to reuse some markup, or pass it to a component to render it:
+
+```svelte:app.svelte
+<script>
+	import { slide } from 'svelte/transition'
+	import { Accordion, AccordionItem } from './accordion'
+</script>
+
+{#snippet accordionItem({ open, toggle })}
+	<button onclick={toggle} class="accordion-heading">
+		<div>Item A</div>
+		<div class"accordion-icon">👈️</div>
+	</button>
+
+	{#if open}
+		<div transition:slide class="accordion-content">
+			Content
+		</div>
+	{/if}
+{/snippet}
+
+<Accordion bind:open>
+	<AccordionItem>
+	</AccordionItem {accordionItem}>
+</Accordion>
+```
+
+If you use a snippet inside a component, it automatically becomes a prop on the component:
+
+```svelte:app.svelte
+<script>
+	import { slide } from 'svelte/transition'
+	import { Accordion, AccordionItem } from './accordion'
+</script>
+
+<Accordion bind:open>
+	<AccordionItem>
+		{#snippet accordionItem({ open, toggle })}
+			<button onclick={toggle} class="accordion-heading">
+				<div>Item A</div>
+				<div class"accordion-icon">👈️</div>
+			</button>
+
+			{#if open}
+				<div transition:slide class="accordion-content">
+					Content
+				</div>
+			{/if}
+		{/snippet}
+	</AccordionItem>
+</Accordion>
+```
+
+This gives you complete control how the accordion item is rendered. That's awesome, but there's one more problem. Let's say I want to bind the `open` state from the `<Accordion>` component to control the open and closed state of the accordion items:
+
+```svelte:app.svelte
+<script>
+	import { slide } from 'svelte/transition'
+	import { Accordion, AccordionItem } from './accordion'
+
+	let open = $state(false)
+</script>
+
+<button onclick={() => (open = !open)}>
+	{open ? 'Close' : 'Open'}
+</button>
+
+<Accordion bind:open>
+	<AccordionItem>
+		<!-- ... -->
+	</AccordionItem>
+</Accordion>
+```
+
+How do we communicate this change from the `<Accordion>` component to its child components? You could "lift state up" and use props everywhere, or you could use the context API which was made to solve this problem.
+
+First you have to set the context value using `setContext` in the parent component:
+
+```
+<script lang="ts">
+	import { setContext } from 'svelte'
+
+	let { open = $bindable(), children } = $props()
+
+	setContext('accordion', {
+		get open() { return open }
+	})
+</script>
+
+<div class="accordion">
+	{@render children?.()}
+</div>
+```
+
+Now you can use `getContext` in a child component to get the context value:
+
+```svelte:accordionItem.svelte
+<script lang="ts">
+	import { getContext } from 'svelte'
+
+	let { accordionItem } = $props()
+
+	const accordion = getContext('accordion')
+	let open = $derived(accordion.open)
+
+	function toggle() {
+		open = !open
+	}
+</script>
+
+<div>
+	{@render accordionItem?.({ open, toggle })}
+</div>
+```
+
+That's it! Since `accordion.open` is a reactive value, we can change the `open` state to be a derived value which updates when `accordion.open` changes.
+
+Let's take a step back and explain this code because it's very important to understand:
+
+```ts:example
+// why this?
+setContext('accordion', {
+	get open() { return open }
+})
+
+// ...and not this?
+setContext('accordion', { open })
+```
+
+The reason passing the `open` state directly loses reactivity is because how JavaScript works. If you just pass the `open` state, it's always going to be the value captured at the time it was passed. Svelte doesn't change how JavaScript works:
+
+```ts:example
+// before
+function log(value) {
+	return value
+}
+
+let emoji = '🍌'
+
+const result = log(emoji)
+console.log(result) // 🍌
+
+emoji = '🍎'
+console.log(result) // still 🍌
+
+// after
+function log(getValue) {
+	return () => getValue()
+}
+
+let emoji = '🍌'
+
+const result = log(() => emoji)
+console.log(result()) // 🍌
+
+emoji = '🍎'
+console.log(result()) // 🍎
+```
+
+I used a getter because the syntax is nice. To get the latest value you just have to say `accordion.open`. That being said, you can use a function, class, accessor, or proxied state to get and set the value:
+
+```ts:example
+import { setContext } from 'svelte'
+
+let emoji = $state('🍌')
+
+// 👍 using functions
+setContext('ctx', {
+	getEmoji() { return emoji },
+	updateEmoji(v) { emoji = v },
+})
+
+// 👍 using classes
+class Emoji {
+	current = $state('🍌')
+}
+setContext('ctx', { emoji: new Emoji() })
+
+// 👍 using accesors
+setContext('ctx', {
+	get emoji() { return emoji },
+	set emoji(v) { emoji = v },
+})
+
+// 👍 using proxied state
+let emoji = $state({ current: '🍌'})
+setContext('ctx', { emoji })
+```
+
+## Transitions And Animations
 
 **Animations in Svelte are first-class** so you don't have to reach for an animation library unless you want to. To use transitions you can import `blur`, `fly`, `slide`, `scale`, `draw` and `crossfade` from `svelte/transition`.
 

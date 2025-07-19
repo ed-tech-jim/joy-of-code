@@ -979,7 +979,7 @@ There are more ways to do this, but I'm going to leave it here for now. Later we
 
 You can compose components by nesting them, using snippets which hold content that can be passed as props to components similar to slots, and communicate between components with the context API without props or events.
 
-Let's create an accordion component that has multiple accordion items. You can create these files inside an `accordion` folder:
+To demonstrate how wonderful component composition is in Svelte, let's create an accordion component that can have many accordion items. You can create these files inside an `accordion` folder:
 
 ```console
 accordion/
@@ -1009,7 +1009,7 @@ In HTML, you can nest elements inside other elements:
 </div>
 ```
 
-The fun part is creating the API you want for your components and how you want to compose them. Here's one way how we can take the accordion HTML and turn it into a reusable component:
+The fun part of using a framework like Svelte is that you get to decide the API of your components and how to compose them. Here's one way how we can take the accordion HTML and turn it into a component ready to be used across your app:
 
 ```svelte:app.svelte
 <script>
@@ -1023,7 +1023,7 @@ The fun part is creating the API you want for your components and how you want t
 </Accordion>
 ```
 
-Every component like the `<Accordion>` component has a `children` snippet prop you can render using the `@render` tag to render any children you pass to the component:
+The `<Accordion>` component accepts children like HTML — which can be anything. In this case, it's a `<AccordionItem>` component which accepts a `title` prop. Every component has an implicit `children` prop which is a snippet you can render using the `@render` tag. Any content inside the component tags becomes part of the `children` snippet:
 
 ```svelte:accordion.svelte
 <script>
@@ -1043,7 +1043,7 @@ Every component like the `<Accordion>` component has a `children` snippet prop y
 </div>
 ```
 
-The `<AccordionItem>` is going to accept the `label` prop and render the content using the `children` snippet prop:
+The `<AccordionItem>` accepts a `label` prop and we can show the accordion item content using the `children` prop which acts like a catch-all for any content inside the component:
 
 ```svelte:accordionItem.svelte
 <script>
@@ -1070,7 +1070,7 @@ The `<AccordionItem>` is going to accept the `label` prop and render the content
 </div>
 ```
 
-That's it! You can now use the `<Accordion>` component in your app. That being said, this has limited composability. What do I mean by that? Let's say you don't like the icon, or position of the individual accordion elements. This could lead to an explosion of props:
+That's it! You can now use the `<Accordion>` component in your app. That being said, this has limited composability. Let's say you don't like the icon, or position of the individual accordion elements. This could lead to a prop explosion:
 
 ```svelte:app.svelte
 <script>
@@ -1084,9 +1084,9 @@ That's it! You can now use the `<Accordion>` component in your app. That being s
 </Accordion>
 ```
 
-That's not a way to live your life! Instead, you can use **inversion of control** so the user can render the accordion item however they want.
+That's not a way to live your life! Instead, you can use [inversion of control](https://en.wikipedia.org/wiki/Inversion_of_control) so the user can render the accordion item however they want.
 
-Let's modify the `<AccordionItem>` component to accept an `accordionItem` snippet instead, and pass it the `open` state and `toggle` function:
+Let's modify the `<AccordionItem>` component to accept an `accordionItem` snippet as a prop instead, and pass it the `open` state and `toggle` function so we have access to them inside the snippet:
 
 ```svelte:accordionItem.svelte
 <script lang="ts">
@@ -1102,7 +1102,7 @@ Let's modify the `<AccordionItem>` component to accept an `accordionItem` snippe
 </div>
 ```
 
-Snippets are just functions! You can define and render a snippet in your component to reuse some markup, or pass it to a component to render it:
+Snippets are just functions! You can define and render a snippet in your component for markup reuse, or delegate the rendering to another component like `<AccordionItem>` by passing it as a prop:
 
 ```svelte:app.svelte
 <script>
@@ -1125,11 +1125,12 @@ Snippets are just functions! You can define and render a snippet in your compone
 
 <Accordion bind:open>
 	<AccordionItem>
+	<!-- passing the snippet as a prop -->
 	</AccordionItem {accordionItem}>
 </Accordion>
 ```
 
-If you use a snippet inside a component, it automatically becomes a prop on the component:
+If you use a snippet inside the component, it implicitly becomes a prop on the component for convenience:
 
 ```svelte:app.svelte
 <script>
@@ -1138,6 +1139,7 @@ If you use a snippet inside a component, it automatically becomes a prop on the 
 </script>
 
 <Accordion bind:open>
+	<!-- the snippet becomes a prop -->
 	<AccordionItem>
 		{#snippet accordionItem({ open, toggle })}
 			<button onclick={toggle} class="accordion-heading">
@@ -1155,7 +1157,9 @@ If you use a snippet inside a component, it automatically becomes a prop on the 
 </Accordion>
 ```
 
-This gives you complete control how the accordion item is rendered. That's awesome, but there's one more problem. Let's say I want to bind the `open` state from the `<Accordion>` component to control the open and closed state of the accordion items:
+This gives you complete control how the accordion item is rendered. I don't know about you, but that's really cool. Alright, but what if you're asked to add a feature to let the user control the open and closed state of the accordion items?
+
+Let's bind the `open` prop from the `<Accordion>` component:
 
 ```svelte:app.svelte
 <script>
@@ -1170,15 +1174,16 @@ This gives you complete control how the accordion item is rendered. That's aweso
 </button>
 
 <Accordion bind:open>
-	<AccordionItem>
+	<!-- do we pass the prop? -->
+	<AccordionItem {open}>
 		<!-- ... -->
 	</AccordionItem>
 </Accordion>
 ```
 
-How do we communicate this change from the `<Accordion>` component to its child components? You could "lift state up" and use props everywhere, or you could use the context API which was made to solve this problem.
+How do we communicate this change from the `<Accordion>` component to its child components? You could "lift state up" and use props everywhere, or you could use the context API which was made to solve this problem. Under the hood, the context API is just a JavaScript [Map](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map) object that holds key-value pairs.
 
-First you have to set the context value using `setContext` in the parent component:
+First you have to set the context in the parent component using `setContext` which accepts a key and a value:
 
 ```
 <script lang="ts">
@@ -1187,6 +1192,7 @@ First you have to set the context value using `setContext` in the parent compone
 	let { open = $bindable(), children } = $props()
 
 	setContext('accordion', {
+		// reactive state
 		get open() { return open }
 	})
 </script>
@@ -1217,9 +1223,7 @@ Now you can use `getContext` in a child component to get the context value:
 </div>
 ```
 
-That's it! Since `accordion.open` is a reactive value, we can change the `open` state to be a derived value which updates when `accordion.open` changes.
-
-Let's take a step back and explain this code because it's very important to understand:
+That's it! Since `accordion.open` is a reactive value, we can change the `open` state to be a derived value which updates when `accordion.open` changes. As you can see from the example, you can also store reactive state in context. Let's take a step back and explain this code because it's very important to understand:
 
 ```ts:example
 // why this?
@@ -1231,69 +1235,101 @@ setContext('accordion', {
 setContext('accordion', { open })
 ```
 
-The reason passing the `open` state directly loses reactivity is because how JavaScript works. If you just pass the `open` state, it's always going to be the value captured at the time it was passed. Svelte doesn't change how JavaScript works:
+When you're referencing state in Svelte, you're accessing the current value. The reason why passing the `open` state loses reactivity is because how JavaScript works. If you just pass the current value of `open` state, it's never going to update.
+
+Let's look at a naive implementation of the context API:
 
 ```ts:example
-// before
-function log(value) {
-	return value
+const context = new Map()
+
+function setContext(key, value) {
+	context.set(key, value)
 }
 
-let emoji = '🍌'
-
-const result = log(emoji)
-console.log(result) // 🍌
-
-emoji = '🍎'
-console.log(result) // still 🍌
-
-// after
-function log(getValue) {
-	return () => getValue()
+function getContext(key) {
+	return context.get(key)
 }
-
-let emoji = '🍌'
-
-const result = log(() => emoji)
-console.log(result()) // 🍌
-
-emoji = '🍎'
-console.log(result()) // 🍎
 ```
 
-I used a getter because the syntax is nice. To get the latest value you just have to say `accordion.open`. That being said, you can use a function, class, accessor, or proxied state to get and set the value:
+The `value` passed to context is not a reference to the `value` variable, but the `🍌` value itself. If we change `value` after we set the context, it won't update:
+
+```ts:example
+let emoji = '🍌'
+
+setContext('ctx', { emoji })
+
+const ctx = getContext('ctx')
+console.log(ctx.emoji) // 🍌
+
+emoji = '🍎'
+console.log(ctx.emoji) // 🍌
+```
+
+Svelte doesn't change how JavaScript works — you need a mechanism that when invoked returns the latest value:
+
+```ts:example
+let emoji = '🍌'
+
+setContext('ctx', {
+	getLatestValue() { return emoji }
+})
+
+const ctx = getContext('ctx')
+console.log(ctx.getLatestValue()) // 🍌
+
+emoji = '🍎'
+console.log(ctx.getLatestValue()) // 🍎
+```
+
+I used a [getter](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Functions/get) because the syntax is nicer than using a function. To get the latest value you just have to say `accordion.open`. That being said, you can use a function, class, accessor, or proxied state to get and set the value:
 
 ```ts:example
 import { setContext } from 'svelte'
 
 let emoji = $state('🍌')
 
-// 👍 using functions
+// 👍 function
 setContext('ctx', {
 	getEmoji() { return emoji },
 	updateEmoji(v) { emoji = v },
 })
 
-// 👍 using classes
+const ctx = getContext('ctx')
+ctx.getEmoji()
+ctx.updateEmoji('🍎')
+
+// 👍 class
 class Emoji {
 	current = $state('🍌')
 }
 setContext('ctx', { emoji: new Emoji() })
 
-// 👍 using accesors
+const ctx = getContext('ctx')
+ctx.emoji.current
+ctx.emoji.current = '🍎'
+
+// 👍 property accesors
 setContext('ctx', {
 	get emoji() { return emoji },
 	set emoji(v) { emoji = v },
 })
 
-// 👍 using proxied state
+const ctx = getContext('ctx')
+ctx.emoji
+ctx.emoji = '🍎'
+
+// 👍 proxied state
 let emoji = $state({ current: '🍌'})
 setContext('ctx', { emoji })
+
+const ctx = getContext('ctx')
+ctx.emoji.current
+ctx.emoji.current = '🍎'
 ```
 
 ## Transitions And Animations
 
-**Animations in Svelte are first-class** so you don't have to reach for an animation library unless you want to. To use transitions you can import `blur`, `fly`, `slide`, `scale`, `draw` and `crossfade` from `svelte/transition`.
+In Svelte, transitions and animations are part of the framework. You don't have to reach for an animation library unless you want to. To use transitions you can import `blur`, `fly`, `slide`, `scale`, `draw` and `crossfade` from `svelte/transition`.
 
 To use a transition use `transition:fade`. You can specify parameters such as `delay`, `duration`, `easing` for `fade`. To learn what they are for each transition [consult the documentation](https://svelte.dev/docs#svelte_transition).
 
@@ -1394,25 +1430,10 @@ $message = 'Bye 👋'
 
 The Svelte store is incredibly powerful and deserves an entire post so I encourage you to go through the [Svelte tutorial](https://learn.svelte.dev/tutorial/writable-stores) and [consult the documentation](https://svelte.dev/docs#run-time-svelte-store) to learn more.
 
-## Further Reading
+## Todo
 
-Join me in the next post where we take what we learned to build a [Svelte todo app](https://joyofcode.xyz/svelte-todo-app) with animations and persistent storage 😍.
-
-You're ready to build some Svelte apps! 👏 When you get more comfortable or encounter problems that require these solutions then you should learn and reach for them:
-
-- [Lifecycle functions](https://learn.svelte.dev/tutorial/onmount)
-- [Tick](https://svelte.dev/docs#run-time-svelte-tick)
-- [Actions](https://learn.svelte.dev/tutorial/actions)
-- [Event forwarding](https://learn.svelte.dev/tutorial/event-forwarding)
-- [Context API](https://learn.svelte.dev/tutorial/context-api)
-- [Module context](https://learn.svelte.dev/tutorial/sharing-code)
-- [Special Elements](https://learn.svelte.dev/tutorial/svelte-self)
-- [The @debug tag](https://learn.svelte.dev/tutorial/debug)
-
-## Conclusion
-
-Svelte is amazing for building all kinds of things and delivers a great developer and user experience.
-
-I hope what stuck most is learning the concepts behind JavaScript frameworks because **if you understand JavaScript you can learn any JavaScript framework** and be productive quicker.
-
-Thanks for reading! 🏄️
+- Using third party libraries in Svelte
+- Lifecycle functions
+- Module context
+- Special elements
+- Deployment

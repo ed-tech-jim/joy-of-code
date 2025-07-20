@@ -124,7 +124,7 @@ You can preprocess the styles with [SCSS](https://sass-lang.com/) by simply addi
 </style>
 ```
 
-## Reactivity And Svelte Runes
+## State Management And Reactivity Using Runes
 
 In the last example, we defined a reactive variable `count` using the `$state` syntax:
 
@@ -1327,113 +1327,123 @@ ctx.emoji.current
 ctx.emoji.current = '🍎'
 ```
 
-## Transitions And Animations
+## Using Animations For Delightful User Interactions
 
-In Svelte, transitions and animations are part of the framework. You don't have to reach for an animation library unless you want to. To use transitions you can import `blur`, `fly`, `slide`, `scale`, `draw` and `crossfade` from `svelte/transition`.
+In this section, I'm going to show you how you can use Svelte's built-in transitions and animations to create delightful user interactions.
 
-To use a transition use `transition:fade`. You can specify parameters such as `delay`, `duration`, `easing` for `fade`. To learn what they are for each transition [consult the documentation](https://svelte.dev/docs#svelte_transition).
+To use a transition, you use the `transition:` directive on an element which plays the transition when the element is added to the DOM and then plays the reverse transition when the element is removed from the DOM.
 
-```svelte:App.svelte {2, 14} showLineNumbers
+Let's create a simple fade transition by importing the `fade` transition from Svelte with and change the duration to `2` seconds:
+
+```svelte:app.svelte
 <script>
 	import { fade } from 'svelte/transition'
 
-	let showFade = false
-
-	function toggleFade() {
-		showFade = !showFade
-	}
+	let visible = $state(false)
 </script>
 
-<button on:click={toggleFade}>Wax poetic</button>
+<button onclick={() => visible = !visible}>
+	Toggle
+</button>
 
-{#if showFade}
-	<blockquote transition:fade={{delay: 250, duration: 300}}>
-		Memories fade, but friends are forever
-	</blockquote>
+{#if visible}
+	<div transition:fade={{ duration: 2000 }}>
+		fades in and out
+	</div>
 {/if}
 ```
 
-You can specify a enter animation with `in:fade` and exit animation with `out:fade` but you're not limited to one transition.
+You can also have separate intro and outro transitions using the `in:` and `out:` directives:
 
-In Svelte you can define custom animations such as this [typewriter effect](https://learn.svelte.dev/tutorial/custom-js-transitions), use [spring and tweened motion](https://learn.svelte.dev/tutorial/tweens) and make smooth transitions between elements using [flip animations](https://learn.svelte.dev/tutorial/animate).
+```svelte:app.svelte
+<script>
+	import { fade, fly } from 'svelte/transition'
 
-## Svelte Store
+	let visible = $state(false)
+</script>
 
-TODO: universal reactivity
+<button onclick={() => visible = !visible}>
+	Toggle
+</button>
 
-Passing data from parent to child component is described as **data flowing top to bottom** but Svelte lets you **reverse** the flow using **bindings**, **event forwarding** and the **context API** which you don't have to know right now because passing props is fine in most cases where you don't have deeply nested components.
-
-However, one feature you're going to use all the time is the [Svelte store](https://svelte.dev/docs#run-time-svelte-store) which is Svelte's answer to **global state management**. You would reach for a store if you have **information that is required by multiple unrelated components** such as the logged in user or theme.
-
-The Svelte store is just an object you can `subscribe` to for updates when the store value changes and `set` and `update` values. You can have `writable` stores to read and write to, `readable` stores if you don't want values to be set from the outside and `derived` stores if you want to use values from multiple stores.
-
-(If you're trying this out in the Svelte REPL it's not obvious how to change the file extension but if you just type the file name such as `stores.js` it's going to change it.)
-
-```js:stores.js showLineNumbers
-import { writable } from 'svelte/store'
-
-export let message = writable('Hello 👋')
+{#if visible}
+	<div in:fly={{ y: 200 }} out:fade>flies in, fades out</div>
+{/if}
 ```
 
-You can use the reactive `$message` syntax to access the value. This also **subscribes and unsubscribes** to the store for you.
+**The important thing to know about transitions is that they're local by default.** Local transitions only play when the block they belong to is added or removed from the DOM, and not the parent block unless you use the `global` modifier:
 
-```svelte:Alert.svelte {2, 5, 9} showLineNumbers
+```svelte:app.svelte
+{#if x}
+	{#if y}
+		<p transition:fade>fades in and out only when y changes</p>
+		<p transition:fade|global>fades in and out when x or y change</p>
+	{/if}
+{/if}
+```
+
+You can find more built-in transitions in the [Svelte documentation](https://svelte.dev/docs/svelte/svelte-transition). If that isn't enough, you can also create custom transitions:
+
+```svelte:app.svelte
 <script>
-	import { message } from './stores.js'
+	import { elasticOut } from 'svelte/easing'
 
-	function updateStore() {
-		$message = 'Bye 👋'
+	let { visible } = $prop()
+
+	function whoosh(node, params) {
+		const existingTransform = getComputedStyle(node).transform.replace('none', '');
+
+		return {
+			delay: params.delay || 0,
+			duration: params.duration || 400,
+			easing: params.easing || elasticOut,
+			css: (t, u) => `transform: ${existingTransform} scale(${t})`
+		};
 	}
 </script>
 
-<p>{$message}</p>
-<button on:click={updateStore}>Click</button>
+{#if visible}
+	<div in:whoosh>whooshes in</div>
+{/if}
 ```
 
-You can create your own stores by implementing the [store contract](https://svelte.dev/docs#component-format-script-4-prefix-stores-with-$-to-access-their-values-store-contract). It must contain a `subscribe` method that's going to be a subscription function and return a `unsubscribe` function and it may include a `set` method to update the value.
+You should always return a `css` function, because Svelte is going to create keyframes using the [Web Animations API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Animations_API).
 
-Here's an example of a writable local storage store you can use to set and update a value in local storage.
+The `t` argument is the transition progress from `0` to `1` after the easing has been applied. You can also use the `u` to reverse the transition.
 
-```js:localStorageStore.js showLineNumbers
-import { writable } from 'svelte/store'
+Alternatively, you can retrn a `tick` function when you need to use JavaScript for a transitions and Svelte is going to use the [requestAnimationFrame](https://developer.mozilla.org/en-US/docs/Web/API/window/requestAnimationFrame) API:
 
-export function localStorageStore(key, initial) {
-  if (!localStorage.getItem(key)) {
-    localStorage.setItem(key, JSON.stringify(initial))
-  }
-
-  let saved = JSON.parse(localStorage.getItem(key))
-  let { subscribe, set, update } = writable(saved)
-
-  return {
-    subscribe,
-    set: (value) => {
-      localStorage.setItem(key, JSON.stringify(value))
-      return set(value)
-    },
-    update
-  }
-}
-```
-
-```svelte:App.svelte showLineNumbers
+```svelte:app.svelte
 <script>
-import { localStorageStore } from './localStorageStore.js'
+	let { visible } = $prop()
 
-let message = localStorageStore('message', 'Hello 👋')
+	function typewriter(node, { speed = 1 }) {
+		const text = node.textContent
+		const duration = text.length / (speed * 0.01)
 
-$message = 'Bye 👋'
+		return {
+			duration,
+			tick: (t) => {
+				const i = ~~(text.length * t)
+				node.textContent = text.slice(0, i)
+			}
+		}
+	}
 </script>
 
-{$message}
+{#if visible}
+	<p in:typewriter={{ speed: 1 }}>
+		The quick brown fox jumps over the lazy dog
+	</p>
+{/if}
 ```
 
-The Svelte store is incredibly powerful and deserves an entire post so I encourage you to go through the [Svelte tutorial](https://learn.svelte.dev/tutorial/writable-stores) and [consult the documentation](https://svelte.dev/docs#run-time-svelte-store) to learn more.
+TODO: deferred transitions, flip, tween, spring
 
 ## Todo
 
+- Universal reactivity
 - Using third party libraries in Svelte
-- Lifecycle functions
 - Module context
 - Special elements
 - Deployment

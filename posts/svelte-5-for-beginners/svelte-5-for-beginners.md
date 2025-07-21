@@ -1533,11 +1533,142 @@ Alternatively, you can return a `tick` function when you need to use JavaScript 
 
 You would of course define these custom transitions using whichever method you prefer in a separate file and import them in your app.
 
-### Deferred Transitions
+### Coordinating Transitions Between Different Elements
+
+In this example, we have a section for published posts and archived posts. You can archive a post by clicking the `💾` button and unarchive a post by clicking the `♻️` button:
+
+```svelte:App.svelte
+<script>
+	import { crossfade } from 'svelte/transition'
+
+	const [send, receive] = crossfade({
+		duration: (d) => Math.sqrt(d * 200)
+	})
+
+	let posts = $state([
+		{
+			id: 1,
+			title: 'Title',
+			description: 'Content',
+			published: true,
+		},
+		// ...
+	])
+
+	function togglePublished(post) {
+		const index = posts.findIndex((p) => p.id === post.id)
+		posts[index].published = !posts[index].published
+	}
+
+	function removePost(post) {
+		const index = posts.findIndex((p) => p.id === post.id)
+		posts.splice(index, 1)
+	}
+</script>
+
+<div>
+	<h2>Posts</h2>
+	<section>
+		{#each posts.filter((posts) => posts.published) as post (post)}
+			<article>
+				<h3>{post.title}</h3>
+				<p >{post.description}</p>
+				<div>
+					<button onclick={() => togglePublished(post)}>💾</button>
+					<button onclick={() => removePost(post)}>❌</button>
+				</div>
+			</article>
+		{:else}
+			<p>There are no posts.</p>
+		{/each}
+	</section>
+</div>
+
+<div>
+	<h2>Archive</h2>
+	<section>
+		{#each posts.filter((posts) => !posts.published) as post (post)}
+			<article>
+				<h3>{post.title}</h3>
+				<div>
+					<button onclick={() => togglePublished(post)}>♻️</button>
+				</div>
+			</article>
+		{:else}
+			<p>Archived items go here.</p>
+		{/each}
+	</section>
+</div>
+```
+
+This works, but the user experience is not great! In the real world, items don't simply teleport around like that. The user should have more context for what happened when performing an action.
+
+In Svelte, you can coordinate transitions between different elements using the `crossfade` transition. The `crossfade` transition creates two transitions named `send` and `receive` which accept a unique key to know what to transition:
+
+```svelte:App.svelte
+<script>
+	import { crossfade } from 'svelte/transition'
+
+	const [send, receive] = crossfade({})
+	// ...
+</script>
+
+<!-- published posts -->
+<article
+	in:receive={{ key: post }}
+	out:send={{ key: post }}
+>
+<!-- ... -->
+
+<!-- archived posts -->
+<article
+	in:receive={{ key: post }}
+	out:send={{ key: post }}
+>
+<!-- ... -->
+```
+
+That's it! 😄
+
+These days there are web APIs to transition view changes like the [View Transitions API](https://developer.mozilla.org/en-US/docs/Web/API/View_Transition_API), but they're not supported in all browsers yet.
 
 ### Flip Animations
 
-### Tween And Spring Animations
+In our previous example, we used the `crossfade` transition to coordinate transitions between different elements, but it's not perfect. You might have noticed when you move a post between being archived and published, all the items "wait" for the transition to end before they "snap" into their new position.
+
+We can fix this by using Svelte's `flip` function which calculates the start and end position of an element and animates between them:
+
+```svelte:App.svelte
+<script>
+	import { flip } from 'svelte/animate'
+	import { crossfade } from 'svelte/transition'
+
+	const [send, receive] = crossfade({})
+	// ...
+</script>
+
+<!-- published posts -->
+<article
+	animate:flip={{ duration: 200 }}
+	in:receive={{ key: post }}
+	out:send={{ key: post }}
+>
+<!-- ... -->
+
+<!-- archived posts -->
+<article
+	animate:flip={{ duration: 200 }}
+	in:receive={{ key: post }}
+	out:send={{ key: post }}
+>
+<!-- ... -->
+```
+
+Isn't it magical? 🪄
+
+[FLIP](https://aerotwist.com/blog/flip-your-animations/) is an animation technique for doing buttery smooth layout transitions. In Svelte, you can only FLIP items inside of an `each` block. It's not reliant on `crossfade`, but they work great together.
+
+### Tweened Values And Springs
 
 ## Todo
 

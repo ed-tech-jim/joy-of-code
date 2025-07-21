@@ -1331,8 +1331,6 @@ ctx.emoji.current = '🍎'
 
 In this section, I'm going to show you how you can use Svelte's built-in transitions and animations to create delightful user interactions.
 
-### Transitions
-
 To use a transition, you use the `transition:` directive on an element which plays the transition when the element is added to the DOM and then plays the reverse transition when the element is removed from the DOM.
 
 Let's create a simple fade transition by importing the `fade` transition from Svelte with and change the duration to `2` seconds:
@@ -1439,8 +1437,6 @@ Alternatively, you can retrn a `tick` function when you need to use JavaScript f
 	</p>
 {/if}
 ```
-
-### Transitions
 
 TODO: deferred transitions, flip, tween, spring
 

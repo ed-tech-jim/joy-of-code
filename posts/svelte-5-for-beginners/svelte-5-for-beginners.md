@@ -1331,114 +1331,213 @@ ctx.emoji.current = '🍎'
 
 In this section, I'm going to show you how you can use Svelte's built-in transitions and animations to create delightful user interactions.
 
-To use a transition, you use the `transition:` directive on an element which plays the transition when the element is added to the DOM and then plays the reverse transition when the element is removed from the DOM.
+### Transitions
 
-Let's create a simple fade transition by importing the `fade` transition from Svelte with and change the duration to `2` seconds:
+To use a transition, you use the `transition:` directive on an element. Transitions play when the element is added to the DOM, and in reverse when the element is removed from the DOM.
+
+This example uses the `fade` transition from Svelte to fade in and out two elements. The first element has a `duration` option of `600` milliseconds, and the second element has a `delay` option of `600` milliseconds:
 
 ```svelte:App.svelte
 <script>
 	import { fade } from 'svelte/transition'
 
-	let visible = $state(false)
+	let play = $state(false)
 </script>
 
-<button onclick={() => visible = !visible}>
-	Toggle
-</button>
+<button onclick={() => (play = !play)}>Play</button>
 
-{#if visible}
-	<div transition:fade={{ duration: 2000 }}>
-		fades in and out
+{#if play}
+	<div>
+		<span transition:fade={{ duration: 600 }}>Hello</span>
+		<span transition:fade={{ delay: 600 }}>World</span>
 	</div>
 {/if}
 ```
 
-You can also have separate intro and outro transitions using the `in:` and `out:` directives:
+You can have separate intro and outro transitions using the `in:` and `out:` directives:
 
 ```svelte:App.svelte
 <script>
 	import { fade, fly } from 'svelte/transition'
+	import { cubicInOut } from 'svelte/easing'
 
-	let visible = $state(false)
+	let play = $state(false)
 </script>
 
-<button onclick={() => visible = !visible}>
-	Toggle
-</button>
+<button onclick={() => (play = !play)}>Play</button>
 
-{#if visible}
-	<div in:fly={{ y: 200 }} out:fade>flies in, fades out</div>
+{#if play}
+	<div class="flex gap-1">
+		<span
+			in:fly={{ x: -10, duration: 600, easing: cubicInOut }}
+			out:fade
+		>
+			Hello
+		</span>
+		<span
+			in:fly={{ x: 10, delay: 600, easing: cubicInOut }}
+			out:fade
+		>
+			World
+		</span>
+	</div>
 {/if}
 ```
 
-**The important thing to know about transitions is that they're local by default.** Local transitions only play when the block they belong to is added or removed from the DOM, and not the parent block unless you use the `global` modifier:
+Svelte also has a lot of [built-in easing functions](https://svelte.dev/docs/svelte/svelte-easing) you can use to make a transition feel more natural, or give it more character.
 
-```svelte:App.svelte
-{#if x}
-	{#if y}
-		<p transition:fade>fades in and out only when y changes</p>
-		<p transition:fade|global>fades in and out when x or y change</p>
-	{/if}
+### Local And Global Transitions
+
+Let's say you have an `each` block that renders a list of items using a staggered animation inside of an `if` block:
+
+```svelte:problem
+<script>
+	import { fade } from 'svelte/transition'
+
+	let play = $state(false)
+</script>
+
+{#if play}
+	<div class="grid">
+		{#each { length: 50 }, i}
+			<div transition:fade={{ delay: i * 100 }}>{i + 1}</div>
+		{/each}
+	</div>
 {/if}
 ```
 
-You can find more built-in transitions in the [Svelte documentation](https://svelte.dev/docs/svelte/svelte-transition). If that isn't enough, you can also create custom transitions:
+It doesn't work! Why?
+
+**Transitions are local by default** which means they only play when the block they belong to is added or removed from the DOM, and not the parent block unless you use the `global` modifier:
+
+```svelte:solution
+<div transition:fade|global={{ delay: i * 100 }}>{i + 1}</div>
+```
+
+In older version of Svelte, transitions were global by default for historical reasons. Keep that in mind if you come across some old Svelte code.
+
+### Playing Transitions Immediately
+
+You might have noticed that transitions don't play immediately when you open a page.
+
+If you want that behavior, you can create a component with an effect to trigger the transition when it's added to the DOM:
+
+```svelte:Fade.svelte
+<script>
+	let { children, options } = $props()
+	let play = $state(false)
+
+	$effect(() => {
+		play = true
+	})
+</script>
+
+{#if play}
+	<div transition:fade={options}>
+		{@render children?.()}
+	</div>
+{/if}
+```
+
+Now you can use the `<Fade>` component in your app:
+
+```svelte:Example.svelte
+<script>
+	import { Fade } from './transitions'
+</script>
+
+<Fade options={{ duration: 2000 }}>
+	Yo, time to fade!
+</Fade>
+```
+
+You could also create a more general `<Transition>` component that accepts a prop for the transition you want to use like `<Transition type="fade">` and conditionally that type of transition.
+
+### Custom Transitions
+
+You can find more built-in transitions in the [Svelte documentation](https://svelte.dev/docs/svelte/svelte-transition). If that isn't enough, you can also create custom transitions.
+
+Custom transitions are regular function which have to return an object with the transition options and a `css`, or `tick` function:
 
 ```svelte:App.svelte
 <script>
 	import { elasticOut } from 'svelte/easing'
 
-	let { visible } = $prop()
-
-	function whoosh(node, params) {
-		const existingTransform = getComputedStyle(node).transform.replace('none', '');
-
+	function customTransition(node, options) {
 		return {
-			delay: params.delay || 0,
-			duration: params.duration || 400,
-			easing: params.easing || elasticOut,
-			css: (t, u) => `transform: ${existingTransform} scale(${t})`
-		};
+			delay: options.delay || 0,
+			duration: options.duration || 2000,
+			easing: options.easing || elasticOut,
+			css: (t) => `
+				color: hsl(${360 * t} , 100%, 80%);
+				transform: scale(${t});
+			`
+		}
 	}
+
+	let play = $state(false)
 </script>
 
-{#if visible}
-	<div in:whoosh>whooshes in</div>
+<button onclick={() => (play = !play)}>Play</button>
+
+{#if play}
+	<div in:customTransition>Whoooo!</div>
 {/if}
 ```
 
-You should always return a `css` function, because Svelte is going to create keyframes using the [Web Animations API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Animations_API).
+You should always return a `css` function, because Svelte is going to create keyframes using the [Web Animations API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Animations_API) which is always more performant.
 
-The `t` argument is the transition progress from `0` to `1` after the easing has been applied. You can also use the `u` to reverse the transition.
+The `t` argument is the transition progress from `0` to `1` after the easing has been applied. If you have a transition that lasts `2` seconds, where you move an item from `0` pixels to `100` pixels, it's going to start from `0` pixels and end at `100` pixels.
 
-Alternatively, you can retrn a `tick` function when you need to use JavaScript for a transitions and Svelte is going to use the [requestAnimationFrame](https://developer.mozilla.org/en-US/docs/Web/API/window/requestAnimationFrame) API:
+You can reverse the transition by using the `u` argument which is the transition progress from `1` to `0`. If you have a transition that lasts `2` seconds, where you move an item from `100` pixels to `0` pixels, it's going to start from `100` pixels and end at `0` pixels.
+
+Alternatively, you can return a `tick` function when you need to use JavaScript for transition and Svelte is going to use the [requestAnimationFrame](https://developer.mozilla.org/en-US/docs/Web/API/window/requestAnimationFrame) API:
 
 ```svelte:App.svelte
 <script>
-	let { visible } = $prop()
+	const chars = '!@#$%&*1234567890-=_+[]{}|;:,.<>/?'
 
-	function typewriter(node, { speed = 1 }) {
-		const text = node.textContent
-		const duration = text.length / (speed * 0.01)
+	function getRandomCharacter() {
+		return chars[Math.floor(Math.random() * chars.length)]
+	}
+
+	function scrambleText(node, options) {
+		const finalText = node.textContent
+		const length = finalText.length
 
 		return {
-			duration,
+			duration: options.duration || 2000,
 			tick: (t) => {
-				const i = ~~(text.length * t)
-				node.textContent = text.slice(0, i)
+				let output = ''
+				for (let i = 0; i < length; i++) {
+					if (t > i / length) {
+						output += finalText[i]
+					} else {
+						output += getRandomCharacter()
+					}
+				}
+				node.textContent = output
 			}
 		}
 	}
+
+	let play = $state(false)
 </script>
 
-{#if visible}
-	<p in:typewriter={{ speed: 1 }}>
-		The quick brown fox jumps over the lazy dog
-	</p>
+<button onclick={() => (play = !play)}>Scramble text</button>
+
+{#if play}
+	<p transition:scrambleText>Scrambling Text Effect</p>
 {/if}
 ```
 
-TODO: deferred transitions, flip, tween, spring
+You would of course define these custom transitions using whichever method you prefer in a separate file and import them in your app.
+
+### Deferred Transitions
+
+### Flip Animations
+
+### Tween And Spring Animations
 
 ## Todo
 

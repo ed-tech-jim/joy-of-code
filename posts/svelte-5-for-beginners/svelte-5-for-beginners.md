@@ -294,6 +294,48 @@ Effects should only be used for side-effects like fetching data from an API, wor
 <pre>{JSON.stringify(pokemon, null, 2)}</pre>
 ```
 
+### Universal Reactivity
+
+So far we've only used reactivity inside Svelte components. In the past, Svelte even had writable stores, because it used compile-time reactivity which didn't work outside of components.
+
+Thankfully, we can use runes outside of Svelte components! You only have to include the `.svelte.js` extension for JavaScript files, or `.svelte.ts` for TypeScript files, so Svelte doesn't have to check every file for runes.
+
+Here's how you can create global state in Svelte, like a config which can be used across your app:
+
+```ts:config.svelte.ts
+export const config = $state({ theme: 'light' })
+```
+
+```svelte:App.svelte
+<script>
+	import { config } from './config.svelte'
+
+	function toggleTheme() {
+		config.theme = config.theme === 'light' ? 'dark' : 'light'
+	}
+</script>
+
+<button onclick={toggleTheme}>{config.theme}</button>
+```
+
+Exporting regular state wouldn't work when we reassign the value, so we're exporting **proxied state**. You can use whichever method you prefer though, like a function or a class:
+
+```ts:config.svelte.ts
+class Config {
+	#theme = $state('light')
+
+	get theme() {
+		return this.#theme
+	}
+
+	set theme(newTheme) {
+		this.#theme = newTheme
+	}
+}
+
+export const config = new Config()
+```
+
 ## Template Logic
 
 There are no conditionals and loops in HTML unless you're using a templating language. In Svelte, you can use the `#if` block to conditionally render content:
@@ -1652,7 +1694,7 @@ That's it! 😄
 
 These days there are web APIs to transition view changes like the [View Transitions API](https://developer.mozilla.org/en-US/docs/Web/API/View_Transition_API), but they're not supported in all browsers yet.
 
-### Flip Animations
+### FLIP Animations
 
 In our previous example, we used the `crossfade` transition to coordinate transitions between different elements, but it's not perfect. When you move a post between being archived and published, all the items "wait" for the transition to end before they "snap" into their new position.
 
@@ -1692,7 +1734,7 @@ You can make your own custom animation functions! Animations are triggered only 
 
 Here's a simplified version of a custom FLIP animation I _yoinked_ from the Svelte source code:
 
-```
+```ts:animations.ts
 function flip(node, { from, to }, params) {
 	const dx = from.left - to.left
   const dy = from.top - to.top
@@ -1803,10 +1845,134 @@ If you want to update the `Tween` or `Spring` value when a reactive value change
 </script>
 ```
 
+## Integrating Third Party Libraries With Svelte
+
+Using Svelte, you have the entire JavaScript ecosystem at your fingertips when a package isn't available. In this section, we're going to learn how to integrate third party JavaScript libraries using Svelte's component and element-level lifecycle functions.
+
+So far we got used to Svelte's declarative syntax and reactivity, but third party JavaScript libraries usually require access to the DOM, and they don't understand Svelte's reactivity.
+
+In this example, we're going to use the [Tippy](https://atomiks.github.io/tippyjs/) library to create a tooltip when you hover over a button, so let's install the package using `npm` (if you're following along in the Svelte Playground, you can skip this and use imports directly):
+
+```console:install
+npm i tippy.js
+```
+
+Some libraries have framework wrappers you can use, but in this case we're unlucky. Anyhow, here is the basic usage example from their docs (simplified to resemble a Svelte component):
+
+```html:index.html
+<script type="module">
+	import tippy from 'tippy.js'
+	import 'tippy.js/dist/tippy.css'
+
+	tippy('#myButton', {
+		content: 'My tooltip!',
+	})
+</script>
+
+<button id="myButton">Tooltip</button>
+```
+
+We can notice the `tippy` function accepts an element, and an options object with a `content` property as arguments. Let's translate the example to Svelte and make sure it works, before we make it reusable.
+
+Because the `<script>` part in Svelte runs before the component is added to the DOM, the `buttonEl` is going to be `undefined`. Using the `onMount` lifecycle function, we can run the code when the component is added. You can also return a cleanup function from `onMount` which runs when the component is removed, or use the `onDestroy` lifecycle function:
+
+```svelte:App.svelte
+<script>
+	import { onMount } from 'svelte'
+	import tippy from 'tippy.js'
+	import 'tippy.js/dist/tippy.css'
+
+	let buttonEl
+
+	onMount(() => {
+		const tooltip = tippy(buttonEl, { content })
+		return () => tooltip.destroy()
+	})
+</script>
+
+<button bind:this={buttonEl}>Tooltip</button>
+```
+
+Can you think of a way to update the tooltip content without using an effect? If we read the Tippy docs, we can learn it has a `setContent` method on the instance, so we just need a way to update it:
+
+```svelte:App.svelte
+<script>
+	import { onMount } from 'svelte'
+	import tippy from 'tippy.js'
+	import 'tippy.js/dist/tippy.css'
+
+	let buttonEl
+	let tooltip
+	let content = $state('My tooltip!')
+
+	onMount(() => {
+		tooltip = tippy(buttonEl, { content })
+		return () => tooltip.destroy()
+	})
+
+	function updateTooltip(e) {
+		tooltip.setContent(e.target.value)
+	}
+</script>
+
+<input oninput={updateTooltip} />
+
+<button bind:this={buttonEl}>Tooltip</button>
+```
+
+And of course, you could bind the value and use an effect to track when it updates to recreate the tooltip:
+
+```svelte:App.svelte
+<script>
+	import tippy from 'tippy.js'
+	import 'tippy.js/dist/tippy.css'
+
+	let buttonEl
+	let content = $state('My tooltip!')
+
+	$effect(() => {
+		const tooltip = tippy(buttonEl, { content })
+		return () => tooltip.destroy()
+	})
+</script>
+
+<input bind:value={content} />
+
+<button bind:this={buttonEl}>Tooltip</button>
+```
+
+I just wanted to show you that you don't have to use an effect. You might track a reactive value inside of the effect on accident, and then you have to [untrack](https://svelte.dev/docs/svelte/svelte#untrack) it which makes everything more complicated:
+
+```svelte:App.svelte
+import { untrack } from 'svelte'
+
+let valueYouDontWantToBeTracked = $state('')
+let valueYouWantToBeTracked = $state('')
+
+$effect(() => {
+	untrack(() => valueYouDontWantToBeTracked)
+	console.log(valueYouWantToBeTracked)
+})
+```
+
+It's your choice, of course.
+
+## Integrating External Event-Based Systems With Svelte
+
+There's something you have to be aware of when creating effects outside of Svelte components and why they're generally discouraged.
+
+And to be honest, this is fine. So what is the downside of this approach? The problem is that you're going to run into this error when you create the effect outside of a Svelte component:
+
+The reason this happens is because effects need to be inside a parent root effect. This is how Svelte keeps track of every effect and knows what to cleanup when the component is removed from the DOM.
+
+There's an advanced [$effect.root](https://svelte.dev/docs/svelte/$effect#$effect.root) rune you can use and provide a manual cleanup, but **I'm only telling you this if you encounter it because you should never have to use it.**
+
+Alright, so how can we improve this?
+
+First, it would make more sense to read the value from local storage when we read the value for the first time — same goes for updating the value. This would help prevent creating the effect outside the component, but now we're creating an effect each time we read and update the value. 😔
+
 ## Todo
 
-- Universal reactivity
-- Using third party libraries in Svelte
 - Module context
 - Special elements
 - Deployment

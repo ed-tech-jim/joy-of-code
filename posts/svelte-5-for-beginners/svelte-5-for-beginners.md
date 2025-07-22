@@ -1367,7 +1367,7 @@ You can have separate intro and outro transitions using the `in:` and `out:` dir
 <button onclick={() => (play = !play)}>Play</button>
 
 {#if play}
-	<div class="flex gap-1">
+	<div>
 		<span
 			in:fly={{ x: -10, duration: 600, easing: cubicInOut }}
 			out:fade
@@ -1385,6 +1385,8 @@ You can have separate intro and outro transitions using the `in:` and `out:` dir
 ```
 
 Svelte also has a lot of [built-in easing functions](https://svelte.dev/docs/svelte/svelte-easing) you can use to make a transition feel more natural, or give it more character.
+
+There's also a bunch of transition events you can listen to, including `introstart`, `introend`, `outrostart`, and `outroend`.
 
 ### Local And Global Transitions
 
@@ -1628,15 +1630,33 @@ In Svelte, you can coordinate transitions between different elements using the `
 <!-- ... -->
 ```
 
+You can also pass options like `duration` and a custom `fallback` transition when there are no matching transitions:
+
+```ts:App.svelte
+const [send, receive] = crossfade({
+	// the duration is based on the distance
+	duration: (d) => Math.sqrt(d * 200),
+	// custom transition
+	fallback(node, params) {
+		return {
+			css: (t) => `
+				transform: scale(${t});
+				opacity: ${t};
+			`
+		}
+	}
+})
+```
+
 That's it! 😄
 
 These days there are web APIs to transition view changes like the [View Transitions API](https://developer.mozilla.org/en-US/docs/Web/API/View_Transition_API), but they're not supported in all browsers yet.
 
 ### Flip Animations
 
-In our previous example, we used the `crossfade` transition to coordinate transitions between different elements, but it's not perfect. You might have noticed when you move a post between being archived and published, all the items "wait" for the transition to end before they "snap" into their new position.
+In our previous example, we used the `crossfade` transition to coordinate transitions between different elements, but it's not perfect. When you move a post between being archived and published, all the items "wait" for the transition to end before they "snap" into their new position.
 
-We can fix this by using Svelte's `flip` function which calculates the start and end position of an element and animates between them:
+We can fix this by using Svelte's `animate:` directive and the `flip` function which calculates the start and end position of an element and animates between them:
 
 ```svelte:App.svelte
 <script>
@@ -1666,9 +1686,122 @@ We can fix this by using Svelte's `flip` function which calculates the start and
 
 Isn't it magical? 🪄
 
-[FLIP](https://aerotwist.com/blog/flip-your-animations/) is an animation technique for doing buttery smooth layout transitions. In Svelte, you can only FLIP items inside of an `each` block. It's not reliant on `crossfade`, but they work great together.
+[FLIP](https://aerotwist.com/blog/flip-your-animations/) is an animation technique for buttery smooth layout animations. In Svelte, you can only FLIP items inside of an `each` block. **It's not** reliant on `crossfade`, but they work great together.
+
+You can make your own custom animation functions! Animations are triggered only when the contents of an `each` block change. You get a reference to the `node`, a `from` and `to` [DOMRect](https://developer.mozilla.org/en-US/docs/Web/API/DOMRect#Properties) which has the size and position of the element before and after the change and `parameters`.
+
+Here's a simplified version of a custom FLIP animation I _yoinked_ from the Svelte source code:
+
+```
+function flip(node, { from, to }, params) {
+	const dx = from.left - to.left
+  const dy = from.top - to.top
+  const dsx = from.width / to.width
+  const dsy = from.height / to.height
+
+	return {
+		duration: params.duration || 1000,
+		css: (t, u) => {
+			const x = dx * u
+    	const y = dy * u
+			const sx = dsx + (1 - dsx) * t
+      const sy = dsy + (1 - dsy) * t
+			return `transform: translate(${x}px, ${y}px) scale(${sx}, ${sy})`
+		}
+	}
+}
+```
+
+This works the same as custom transitions, so you can remind yourself how that works by revisiting it — like with custom transitions, you can also return a `tick` function with the same arguments.
 
 ### Tweened Values And Springs
+
+Imagine if you could take the animation engine from CSS and interpolate any value, including objects and arrays.
+
+This is where the `Tween` and `Spring` classes come in handy.
+
+The `Tween` class accepts a target value and options. You can use the `current` property to get the current value, and `target` to update the value:
+
+```svelte:App.svelte
+<script>
+	import { Tween } from 'svelte/motion'
+	import { cubicInOut } from 'svelte/easing'
+
+	const size = new Tween(50, { duration: 300, easing: cubicInOut })
+
+	function onmousedown() {
+		size.target = 150
+	}
+
+	function onmouseup() {
+		size.target = 50
+	}
+</script>
+
+<svg width="400" height="400" viewBox="0 0 400 400">
+	<circle
+		{onmousedown}
+		{onmouseup}
+		cx="200"
+		cy="200"
+		r={size.current}
+		fill="aqua"
+	/>
+</svg>
+```
+
+The `Tween` class has the same methods as `Tween`, but uses spring physics and doesn't have a duration. Instead, it has `stiffness`, `damping`, and `precision` options:
+
+```svelte:App.svelte
+<script>
+	import { Spring } from 'svelte/motion'
+
+	const size = new Spring(50, { stiffness: 0.1, damping: 0.25, precision: 0.1 })
+
+	function onmousedown() {
+		size.target = 150
+	}
+
+	function onmouseup() {
+		size.target = 50
+	}
+</script>
+
+<svg width="400" height="400" viewBox="0 0 400 400">
+	<circle
+		{onmousedown}
+		{onmouseup}
+		cx="200"
+		cy="200"
+		r={size.current}
+		fill="aqua"
+	/>
+</svg>
+```
+
+They both have a `set` function if you want to update the value and override the options, which also returns a promise:
+
+```ts:App.svelte
+async function onmousedown() {
+	// using `target` to update the value
+	size.target = 150
+	// using `set` to update the value
+	await size.set(150, { duration: 200 })
+}
+```
+
+If you want to update the `Tween` or `Spring` value when a reactive value changes, you can use the `of` method:
+
+```svelte:App.svelte
+<script>
+	import { Spring, Tween } from 'svelte/motion'
+
+	let { value, options } = $props()
+
+	const tweenSize = Tween.of(() => value, options)
+	const springSize = Spring.of(() => value, options)
+</script>
+```
 
 ## Todo
 

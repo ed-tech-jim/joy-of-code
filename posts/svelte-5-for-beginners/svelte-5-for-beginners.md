@@ -32,13 +32,13 @@ Let's start with a simple counter example using regular HTML and JavaScript:
 
 ```svelte:app.html
 <script>
-  let count = 0
-  let text = document.querySelector('p')
+	let count = 0
+	let text = document.querySelector('p')
 
-  function increment() {
-    count++
-    text.innerText = `Clicked ${count} ${count === 1 ? 'time' : 'times'}`
-  }
+	function increment() {
+		count++
+		text.innerText = `Clicked ${count} ${count === 1 ? 'time' : 'times'}`
+	}
 </script>
 
 <p>Clicked 0 times</p>
@@ -51,11 +51,11 @@ Let's look at the same example in Svelte:
 
 ```svelte:App.svelte
 <script>
-  let count = $state(0)
+	let count = $state(0)
 
-  function increment() {
+	function increment() {
 		count++
-  }
+	}
 </script>
 
 <p>Clicked {count} {count === 1 ? 'time' : 'times'}</p>
@@ -76,9 +76,9 @@ Let's create a `<style>` tag to add some styles:
 
 ```svelte:App.svelte
 <style>
-  p {
-    color: red;
-  }
+	p {
+		color: red;
+	}
 </style>
 ```
 
@@ -111,7 +111,7 @@ To make your styles global inside a component, you can use the `global` modifier
 You can preprocess the styles with [SCSS](https://sass-lang.com/) by simply adding `lang="scss"` to the `<style>` tag, or use TypeScript by adding `lang="ts"` to the `<script>` tag:
 
 ```svelte:App.svelte
-<script lang="ts">
+<script>
 	let count: number = 0
 </script>
 
@@ -130,11 +130,11 @@ In the last example, we defined a reactive variable `count` using the `$state` s
 
 ```svelte:App.svelte
 <script>
-  let count = $state(0)
+	let count = $state(0)
 
-  function increment() {
-    count++
-  }
+	function increment() {
+		count++
+	}
 </script>
 
 <p>Clicked {count} {count === 1 ? 'time' : 'times'}</p>
@@ -145,15 +145,15 @@ The `$state` syntax is called a **rune** and is part of the Svelte language. Und
 
 The `$state` rune marks a variable as reactive. Svelte's reactivity is based on **assignments**. To update the UI, you just assign a new value to a reactive variable:
 
-```svelte:App.svelte
+```svelte:App.svelte {5-10}
 <script>
 	// reactive value
-  let count = $state(0)
+	let count = $state(0)
 
-  function increment() {
+	function increment() {
 		// reactive assignment
-    count++
-  }
+		count += 1
+	}
 </script>
 
 <!-- update every time count changes -->
@@ -163,16 +163,16 @@ The `$state` rune marks a variable as reactive. Svelte's reactivity is based on 
 
 In Svelte, components don't rerun when a value changes like in React. Instead, Svelte surgically updates the DOM in place when a value updates.
 
-If you want a value to automatically update when other values it depends on update, you should use the `$derived` rune to create a computed property:
+If you want a value to automatically update when other values it depends on update, you should use the `$derived` rune to create a computed value:
 
-```svelte:App.svelte
+```svelte:App.svelte {3-11}
 <script>
-  let count = $state(0)
+	let count = $state(0)
 	let double = $derived(count * 2)
 
-  function increment() {
-    count++
-  }
+	function increment() {
+		count += 1
+	}
 </script>
 
 <button onclick={increment}>
@@ -182,7 +182,7 @@ If you want a value to automatically update when other values it depends on upda
 
 The `$derived` rune only accepts an expression by default, but you can use the `$derived.by` rune if you want to pass a function for a more complex derivation:
 
-```svelte:App.svelte
+```svelte:App.svelte {6-12}
 <script>
 	let cart = $state([
 		{ item: 'apple', total: 10 },
@@ -206,7 +206,7 @@ The last rune you should know about is the `$effect` rune. Effects are functions
 
 **Effects don't need a dependency array** because of how signals work — if a reactive value is read inside of an effect, it will be tracked and the effect will rerun when the tracked value changes:
 
-```svelte:App.svelte
+```svelte:App.svelte {5-10}
 <script>
 	let count = $state(0)
 	let double = $derived(count * 2)
@@ -230,7 +230,7 @@ The last rune you should know about is the `$effect` rune. Effects are functions
 
 Here's an example how using effects to synchronize state can cause unexpected behavior:
 
-```svelte:App.svelte
+```svelte:App.svelte {3-7,12-13}
 <script>
 	let count = $state(0)
 	let double = $state(0)
@@ -251,7 +251,7 @@ Here's an example how using effects to synchronize state can cause unexpected be
 
 **Always derive your state** using the `$derived` rune when you can and reach for the `$effect` rune sparingly:
 
-```svelte:App.svelte
+```svelte:App.svelte {3,7-8}
 <script>
 	let count = $state(0)
 	let double = $derived(count * 2)
@@ -281,8 +281,8 @@ Effects should only be used for side-effects like fetching data from an API, wor
 			fetch('https://pokeapi.co/api/v2/pokemon')
 				.then((response) => response.json())
 				.then((data) => {
-					// sync with an external system
 					pokemon = data
+					// sync with an external system
 					localStorage.setItem('pokemon', JSON.stringify(data))
 				})
 		} else {
@@ -384,7 +384,7 @@ To loop over a list of items, you use the `#each` block:
 
 You can [destructure](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Destructuring_assignment) the items values you're iterating over, get the current item index and provide a key, so Svelte can keep track of changes:
 
-```svelte:App.svelte
+```svelte:App.svelte {2}
 <ul>
 	{#each todos as { id, text, done }, index (id)}
 		<li>
@@ -398,13 +398,9 @@ You can [destructure](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Re
 Sometimes you just want to create an arbitrary amount of items like a grid, so you can ignore the `as` part. Here's an example of a 10x10 grid:
 
 ```svelte:App.svelte
-<script>
-	let size = 10
-</script>
-
 <div class="grid">
-  {#each { length: size }, row}
-    {#each { length: size }, col}
+  {#each { length: 10 }, row}
+    {#each { length: 10 }, col}
       <div class="cell">{row},{col}</div>
     {/each}
   {/each}
@@ -431,11 +427,11 @@ Thankfully, Svelte has a built-in solution for async data loading using the `#aw
 
 ```svelte:App.svelte
 <script>
-  async function getPokemon(name) {
-    let response = await fetch(`https://pokeapi.co/api/v2/pokemon/${name}`)
-    let { name, sprites } = await response.json()
+	async function getPokemon(name) {
+		let response = await fetch(`https://pokeapi.co/api/v2/pokemon/${name}`)
+		let { name, sprites } = await response.json()
 		return { name, image: sprites['front_default'] }
-  }
+	}
 </script>
 
 {#await getPokemon('charizard')}
@@ -452,11 +448,11 @@ In the near future, you're going to be able to `await` a promise directly in a S
 
 ```ts:svelte.config.js
 export default {
-  compilerOptions: {
-    experimental: {
-      async: true
-    }
-  }
+	compilerOptions: {
+		experimental: {
+			async: true
+		}
+	}
 }
 ```
 
@@ -562,10 +558,10 @@ You can also prevent default behavior by using `e.preventDefault()`. This is use
 
 In this example we take the user input by listening to the `input` event and filter the list of items based on it:
 
-```svelte:App.svelte
+```svelte:App.svelte {3,4,8,14}
 <script>
- 	let list = $state(['angular', 'react', 'svelte', 'vue'])
-  let filteredList = $derived(list.filter(item => item.includes(search)))
+	let list = $state(['angular', 'react', 'svelte', 'vue'])
+	let filteredList = $derived(list.filter(item => item.includes(search)))
 	let search = $state('')
 </script>
 
@@ -611,14 +607,14 @@ Svelte provides many two-way bindings, and some readonly bindings. There are inp
 
 One of the more useful bindings is `bind:this` to get a reference to a DOM node such as the `<canvas>` element for example:
 
-```svelte:App.svelte
+```svelte:App.svelte {3,10,14}
 <script>
 	// `undefined` until the component is added
 	let canvas
 
 	$effect(() => {
 		// ⛔️ don't do this
-		// const canvas = document.querySelector('canvas')
+		const canvas = document.querySelector('canvas')
 
 		// 👍️ bind the value instead
 		const ctx = canvas.getContext('2d')
@@ -632,24 +628,24 @@ Another useful thing to know about are **function bindings** when you need to do
 
 ```svelte:App.svelte
 <script>
- 	let celsius = $state(0)
- 	let fahrenheit = $state(32)
+	let celsius = $state(0)
+	let fahrenheit = $state(32)
 </script>
 
 <input bind:value={
-  () => celsius,
-  (v) => {
-    celsius = v
-    fahrenheit = (celsius * 9/5 + 32).toFixed()
-  }
+	() => celsius,
+	(v) => {
+		celsius = v
+		fahrenheit = (celsius * 9/5 + 32).toFixed()
+	}
 } />
 
 <input bind:value={
-  () => fahrenheit,
-  (v) => {
-    fahrenheit = v
-    celsius = ((fahrenheit - 32) * 5/9).toFixed()
-  }
+	() => fahrenheit,
+	(v) => {
+		fahrenheit = v
+		celsius = ((fahrenheit - 32) * 5/9).toFixed()
+	}
 } />
 ```
 
@@ -748,9 +744,9 @@ todos/
 
 The way Svelte knows something is a component is by a capitalized tag such as `<Component>`, or dot notation like `<my.component>`. How you name the file is irrelevant. Most often you're going to see the PascalCase naming convention, so that's what I'm going to use. Personally, I prefer kebab-case.
 
-First we'll create the component that handles adding a new todo:
+First we'll create the component that handles adding a new todo. To receive and destructure props we use the `$props` rune. Here we bind the input value to the `todo` variable in the parent component, so we have to let Svelte know it's okay for the child to mutate the parent state by using the `$bindable` rune:
 
-```svelte:AddTodo.svelte
+```svelte:AddTodo.svelte {2,6}
 <script>
 	let { todo = $bindable(), addTodo } = $props()
 </script>
@@ -760,36 +756,31 @@ First we'll create the component that handles adding a new todo:
 </form>
 ```
 
-To receive and destructure props we use the `$props` rune. Here we bind the input value to the `todo` variable in the parent component, so we have to let Svelte know it's okay for the child to mutate the parent state by using the `$bindable` rune. You can now bind the `todo` prop:
+You can now bind the `todo` prop:
 
-```diff:todos.svelte
+```svelte:Todos.svelte {6}
 <script>
-+	import AddTodo from './AddTodo.svelte'
+	import AddTodo from './AddTodo.svelte'
+	// ...
 </script>
 
-+ <AddTodo bind:todo {addTodo} />
+<AddTodo bind:todo {addTodo} />
 ```
 
 In reality, you don't have to do this. I just wanted to demonstrate how to use the `$bindable` rune if you have to. It makes more sense to move the `todo` state inside the component for adding todos:
 
-```diff:todos.svelte
+```svelte:Todos.svelte
 <script>
--	let todo = $state('')
-
--	function addTodo(e) {
-+	function addTodo(todo) {
--		e.preventDefault()
+	function addTodo(todo) {
 		todos.push({
 			id: crypto.randomUUID(),
 			text: todo,
 			completed: false
 		})
--		todo = ''
-}
+	}
 </script>
 
-- <AddTodo {todo} {addTodo} />
-+ <AddTodo {addTodo} />
+<AddTodo {addTodo} />
 ```
 
 ```svelte:AddTodo.svelte
@@ -814,7 +805,7 @@ I'm mostly using a form because you can just press enter to submit. Instead of b
 Let's create a component that renders the list of todos and spice it up with a built-in Svelte transition:
 
 ```svelte:TodoList.svelte
-<script lang="ts">
+<script>
 	import { slide } from 'svelte/transition'
 
 	let { todos, removeTodo } = $props()
@@ -831,14 +822,14 @@ Let's create a component that renders the list of todos and spice it up with a b
 </ul>
 ```
 
-```diff:todos.svelte
+```svelte:Todos.svelte {3,7}
 <script>
 	import AddTodo from './AddTodo.svelte'
-+	import TodoList from './TodoList.svelte'
+	import TodoList from './TodoList.svelte'
 </script>
 
 <AddTodo {todo} {addTodo} />
-+ <TodoList todos={filteredTodos} {removeTodo} />
+<TodoList todos={filteredTodos} {removeTodo} />
 ```
 
 Now we can create the component that filters the todos:
@@ -859,16 +850,16 @@ Now we can create the component that filters the todos:
 </div>
 ```
 
-```diff:todos.svelte
+```svelte:Todos.svelte {4,9}
 <script>
 	import AddTodo from './AddTodo.svelte'
 	import TodoList from './TodoList.svelte'
-+	import TodoFilter from './TodoFilter.svelte'
+	import TodoFilter from './TodoFilter.svelte'
 </script>
 
 <AddTodo {todo} {addTodo} />
 <TodoList todos={filteredTodos} {removeTodo} />
-+ <TodoFilter {remaining} {setFilter} {clearCompleted} />
+<TodoFilter {remaining} {setFilter} {clearCompleted} />
 ```
 
 I left the todo item component for last to show you the downside of abusing bind:
@@ -889,7 +880,7 @@ I left the todo item component for last to show you the downside of abusing bind
 
 This works, but Svelte is going to throw a bunch of warnings because you're mutating `todos` in the parent state, so now we have to make `todos` bindable:
 
-```diff:todos.svelte
+```svelte:Todos.svelte {8}
 <script>
 	import AddTodo from './AddTodo.svelte'
 	import TodoList from './TodoList.svelte'
@@ -897,23 +888,21 @@ This works, but Svelte is going to throw a bunch of warnings because you're muta
 </script>
 
 <AddTodo {todo} {addTodo} />
-- <TodoList todos={filteredTodos} {removeTodo} />
-+ <TodoList bind:todos={filteredTodos} {removeTodo} />
+<TodoList bind:todos={filteredTodos} {removeTodo} />
 <TodoFilter {remaining} {setFilter} {clearCompleted} />
 ```
 
-```diff:todoItem.svelte
+```svelte:TodoItem.svelte {4,10}
 <script>
 	import TodoItem from './TodoItem.svelte'
 
--	let { todos, removeTodo } = $props()
-+	let { todos = $bindable(), removeTodo } = $props()
+	let { todos = $bindable(), removeTodo } = $props()
 </script>
 
 <ul>
 	{#each todos as todo, i (todo.id)}
 		<li transition:slide>
-+			<TodoItem bind:todo={todos[i]} {removeTodo} />
+			<TodoItem bind:todo={todos[i]} {removeTodo} />
 		</li>
 	{/each}
 </ul>
@@ -921,40 +910,39 @@ This works, but Svelte is going to throw a bunch of warnings because you're muta
 
 In general, avoid mutating props to avoid unexpected state changes. If you want to update a value from a child component, callback props are a better option. Let's change the todos component to show you what I mean:
 
-```diff:todos.svelte
+```svelte:Todos.svelte {3-11,14-17,19-22,25-27}
 <script>
-function addTodo(e) {
-+	e.preventDefault()
-+	const form = e.currentTarget
-+	const formData = new FormData(form)
-	todos.push({
-		id: crypto.randomUUID(),
--		text: todo,
-+		text: formData.get('todo'),
-		completed: false
-	})
-+	form.reset()
-}
+	function addTodo(e) {
+		e.preventDefault()
+		const form = e.currentTarget
+		const formData = new FormData(form)
+		todos.push({
+			id: crypto.randomUUID(),
+			text: formData.get('todo'),
+			completed: false
+		})
+		form.reset()
+	}
 
-+	function toggleTodo(todo: Todo) {
-+		const index = todos.findIndex((t) => t.id === todo.id)
-+		todos[index].completed = !todos[index].completed
-+	}
+	function toggleTodo(todo: Todo) {
+		const index = todos.findIndex((t) => t.id === todo.id)
+		todos[index].completed = !todos[index].completed
+	}
 
-+	function updateTodo(todo: Todo) {
-+		const index = todos.findIndex((t) => t.id === todo.id)
-+		todos[index].text = todo.text
-+	}
+	function updateTodo(todo: Todo) {
+		const index = todos.findIndex((t) => t.id === todo.id)
+		todos[index].text = todo.text
+	}
 </script>
 
-+ <AddTodo {addTodo} />
-+ <TodoList todos={filteredTodos} {toggleTodo} {updateTodo} {removeTodo} />
-+ <TodoFilter {remaining} {setFilter} {clearCompleted} />
+<AddTodo {addTodo} />
+<TodoList todos={filteredTodos} {toggleTodo} {updateTodo} {removeTodo} />
+<TodoFilter {remaining} {setFilter} {clearCompleted} />
 ```
 
 Let's update the offending components to use callback props to update the todos instead of binding props everywhere, which could lead to unpredictable behavior:
 
-```svelte:AddTodo.svelte
+```svelte:AddTodo.svelte {2,5}
 <script>
 	let { addTodo } = $props()
 </script>
@@ -964,7 +952,7 @@ Let's update the offending components to use callback props to update the todos 
 </form>
 ```
 
-```svelte:TodoList.svelte
+```svelte:TodoList.svelte {4-9}
 <script>
 	import TodoItem from './TodoItem.svelte'
 
@@ -978,8 +966,8 @@ Let's update the offending components to use callback props to update the todos 
 </ul>
 ```
 
-```svelte:TodoItem.svelte
-<script lang="ts">
+```svelte:TodoItem.svelte {4,10,15,18}
+<script>
 	import { slide } from 'svelte/transition'
 
 	let { todo, toggleTodo, updateTodo, removeTodo } = $props()
@@ -1067,27 +1055,27 @@ The fun part of using a framework like Svelte is that you get to decide the API 
 
 The `<Accordion>` component accepts children like HTML — which can be anything. In this case, it's a `<AccordionItem>` component which accepts a `title` prop. Every component has an implicit `children` prop which is a snippet you can render using the `@render` tag. Any content inside the component tags becomes part of the `children` snippet:
 
-```svelte:Accordion.svelte
+```svelte:Accordion.svelte {6-11,13-14}
 <script>
 	let { children } = $props()
 </script>
 
 <div class="accordion">
-	<!-- a) conditional with a fallback -->
+	<!-- conditional with a fallback -->
 	{#if children}
 		{@render children()}
 	{:else}
 		<p>Fallback content</p>
 	{/if}
 
-	<!-- b) optional chaining -->
+	<!-- optional chaining -->
 	{@render children?.()}
 </div>
 ```
 
 The `<AccordionItem>` accepts a `label` prop and we can show the accordion item content using the `children` prop which acts like a catch-all for any content inside the component:
 
-```svelte:AccordionItem.svelte
+```svelte:AccordionItem.svelte {2,13,19}
 <script>
 	let { label, children } = $props()
 
@@ -1114,7 +1102,7 @@ The `<AccordionItem>` accepts a `label` prop and we can show the accordion item 
 
 That's it! You can now use the `<Accordion>` component in your app. That being said, this has limited composability. Let's say you don't like the icon, or position of the individual accordion elements. This could lead to a silly amount of props and conditionals:
 
-```svelte:App.svelte
+```svelte:App.svelte {7-10}
 <script>
 	import { Accordion, AccordionItem } from './accordion'
 </script>
@@ -1135,8 +1123,8 @@ That's not a way to live your life! Instead, you can use [inversion of control](
 
 Let's modify the `<AccordionItem>` component to accept an `accordionItem` snippet as a prop instead, and pass it the `open` state and `toggle` function so we have access to them inside the snippet:
 
-```svelte:AccordionItem.svelte
-<script lang="ts">
+```svelte:AccordionItem.svelte {2,10}
+<script>
 	let { accordionItem } = $props()
 
 	function toggle() {
@@ -1151,7 +1139,7 @@ Let's modify the `<AccordionItem>` component to accept an `accordionItem` snippe
 
 Snippets are just functions! You can define and render a snippet in your component for markup reuse, or delegate the rendering to another component like `<AccordionItem>` by passing it as a prop:
 
-```svelte:App.svelte
+```svelte:App.svelte {6-17,20}
 <script>
 	import { slide } from 'svelte/transition'
 	import { Accordion, AccordionItem } from './accordion'
@@ -1177,7 +1165,7 @@ Snippets are just functions! You can define and render a snippet in your compone
 
 If you use a snippet inside the component, it implicitly becomes a prop on the component for convenience:
 
-```svelte:App.svelte
+```svelte:App.svelte {8-20}
 <script>
 	import { slide } from 'svelte/transition'
 	import { Accordion, AccordionItem } from './accordion'
@@ -1204,9 +1192,11 @@ If you use a snippet inside the component, it implicitly becomes a prop on the c
 
 This gives you complete control how the accordion item is rendered. I don't know about you, but that's really cool.
 
-Alright, but what if you're asked to add a feature to let the user control the open and closed state of the accordion items? You might bind the `open` prop from the `<Accordion>` component and pass the prop which works but then you have to add another prop:
+Alright, but what if you're asked to add a feature to let the user control the open and closed state of the accordion items?
 
-```svelte:App.svelte
+You might bind the `open` prop from the `<Accordion>` component and pass the prop which works but then you have to add another prop:
+
+```svelte:App.svelte {5,12}
 <script>
 	import { slide } from 'svelte/transition'
 	import { Accordion, AccordionItem } from './accordion'
@@ -1228,8 +1218,8 @@ How do we communicate this change from the `<Accordion>` component to its child 
 
 First you have to set the context in the parent component using `setContext` which accepts a key and a value:
 
-```svelte:Accordion.svelte
-<script lang="ts">
+```svelte:Accordion.svelte {2,6-8}
+<script>
 	import { setContext } from 'svelte'
 
 	let { open = $bindable(), children } = $props()
@@ -1246,8 +1236,8 @@ First you have to set the context in the parent component using `setContext` whi
 
 Now you can use `getContext` in a child component to get the context value. Since `accordion.open` is a reactive value, we can change the `open` state to be a derived value which updates when `accordion.open` changes:
 
-```svelte:AccordionItem.svelte
-<script lang="ts">
+```svelte:AccordionItem.svelte {2,6,7}
+<script>
 	import { getContext } from 'svelte'
 
 	let { accordionItem } = $props()
@@ -1379,7 +1369,7 @@ To use a transition, you use the `transition:` directive on an element. Transiti
 
 This example uses the `fade` transition from Svelte to fade in and out two elements. The first element has a `duration` option of `600` milliseconds, and the second element has a `delay` option of `600` milliseconds:
 
-```svelte:App.svelte
+```svelte:App.svelte {2,11-12}
 <script>
 	import { fade } from 'svelte/transition'
 
@@ -1398,7 +1388,7 @@ This example uses the `fade` transition from Svelte to fade in and out two eleme
 
 You can have separate intro and outro transitions using the `in:` and `out:` directives:
 
-```svelte:App.svelte
+```svelte:App.svelte {2,13-14,19-20}
 <script>
 	import { fade, fly } from 'svelte/transition'
 	import { cubicInOut } from 'svelte/easing'
@@ -1432,9 +1422,9 @@ There's also a bunch of transition events you can listen to, including `introsta
 
 ### Local And Global Transitions
 
-Let's say you have an `each` block that renders a list of items using a staggered animation inside of an `if` block:
+Let's say you have an `each` block that renders a list of items using a staggered transition inside of an `if` block:
 
-```svelte:problem
+```svelte:problem {9-13}
 <script>
 	import { fade } from 'svelte/transition'
 
@@ -1444,7 +1434,9 @@ Let's say you have an `each` block that renders a list of items using a staggere
 {#if play}
 	<div class="grid">
 		{#each { length: 50 }, i}
-			<div transition:fade={{ delay: i * 100 }}>{i + 1}</div>
+			<div transition:fade={{ delay: i * 100 }}>
+				{i + 1}
+			</div>
 		{/each}
 	</div>
 {/if}
@@ -1455,7 +1447,9 @@ It doesn't work! Why?
 **Transitions are local by default** which means they only play when the block they belong to is added or removed from the DOM, and not the parent block unless you use the `global` modifier:
 
 ```svelte:solution
-<div transition:fade|global={{ delay: i * 100 }}>{i + 1}</div>
+<div transition:fade|global={{ delay: i * 100 }}>
+	{i + 1}
+</div>
 ```
 
 In older version of Svelte, transitions were global by default for historical reasons. Keep that in mind if you come across some old Svelte code.
@@ -1466,7 +1460,7 @@ You might have noticed that transitions don't play immediately when you open a p
 
 If you want that behavior, you can create a component with an effect to trigger the transition when it's added to the DOM:
 
-```svelte:Fade.svelte
+```svelte:Fade.svelte {3,5-7}
 <script>
 	let { children, options } = $props()
 	let play = $state(false)
@@ -1491,7 +1485,7 @@ Now you can use the `<Fade>` component in your app:
 </script>
 
 <Fade options={{ duration: 2000 }}>
-	Yo, time to fade!
+	Isn't this cool?
 </Fade>
 ```
 
@@ -1503,7 +1497,7 @@ You can find more built-in transitions in the [Svelte documentation](https://sve
 
 Custom transitions are regular function which have to return an object with the transition options and a `css`, or `tick` function:
 
-```svelte:App.svelte
+```svelte:App.svelte {4-14,22}
 <script>
 	import { elasticOut } from 'svelte/easing'
 
@@ -1531,13 +1525,13 @@ Custom transitions are regular function which have to return an object with the 
 
 You should always return a `css` function, because Svelte is going to create keyframes using the [Web Animations API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Animations_API) which is always more performant.
 
-The `t` argument is the transition progress from `0` to `1` after the easing has been applied. If you have a transition that lasts `2` seconds, where you move an item from `0` pixels to `100` pixels, it's going to start from `0` pixels and end at `100` pixels.
+The `t` argument is the transition progress from `0` to `1` after the easing has been applied — if you have a transition that lasts `2` seconds, where you move an item from `0` pixels to `100` pixels, it's going to start from `0` pixels and end at `100` pixels.
 
-You can reverse the transition by using the `u` argument which is the transition progress from `1` to `0`. If you have a transition that lasts `2` seconds, where you move an item from `100` pixels to `0` pixels, it's going to start from `100` pixels and end at `0` pixels.
+You can reverse the transition by using the `u` argument which is a transition progress from `1` to `0` — if you have a transition that lasts `2` seconds, where you move an item from `100` pixels to `0` pixels, it's going to start from `100` pixels and end at `0` pixels.
 
-Alternatively, you can return a `tick` function when you need to use JavaScript for transition and Svelte is going to use the [requestAnimationFrame](https://developer.mozilla.org/en-US/docs/Web/API/window/requestAnimationFrame) API:
+Alternatively, you can return a `tick` function when you need to use JavaScript for a transition and Svelte is going to use the [requestAnimationFrame](https://developer.mozilla.org/en-US/docs/Web/API/window/requestAnimationFrame) API:
 
-```svelte:App.svelte
+```svelte:App.svelte {8-26,34}
 <script>
 	const chars = '!@#$%&*1234567890-=_+[]{}|;:,.<>/?'
 
@@ -1579,16 +1573,10 @@ You would of course define these custom transitions using whichever method you p
 
 ### Coordinating Transitions Between Different Elements
 
-In this example, we have a section for published posts and archived posts. You can archive a post by clicking the `💾` button and unarchive a post by clicking the `♻️` button:
+In this example, we have a section for published posts and archived posts where you can archive and unarchive post:
 
 ```svelte:App.svelte
 <script>
-	import { crossfade } from 'svelte/transition'
-
-	const [send, receive] = crossfade({
-		duration: (d) => Math.sqrt(d * 200)
-	})
-
 	let posts = $state([
 		{
 			id: 1,
@@ -1649,7 +1637,7 @@ This works, but the user experience is not great! In the real world, items don't
 
 In Svelte, you can coordinate transitions between different elements using the `crossfade` transition. The `crossfade` transition creates two transitions named `send` and `receive` which accept a unique key to know what to transition:
 
-```svelte:App.svelte
+```svelte:App.svelte {2,4,10-11,17-18}
 <script>
 	import { crossfade } from 'svelte/transition'
 
@@ -1672,7 +1660,7 @@ In Svelte, you can coordinate transitions between different elements using the `
 <!-- ... -->
 ```
 
-You can also pass options like `duration` and a custom `fallback` transition when there are no matching transitions:
+You can also pass `duration` and a custom `fallback` transition options when there are no matching transitions:
 
 ```ts:App.svelte
 const [send, receive] = crossfade({
@@ -1700,7 +1688,7 @@ In our previous example, we used the `crossfade` transition to coordinate transi
 
 We can fix this by using Svelte's `animate:` directive and the `flip` function which calculates the start and end position of an element and animates between them:
 
-```svelte:App.svelte
+```svelte:App.svelte {2,11,19}
 <script>
 	import { flip } from 'svelte/animate'
 	import { crossfade } from 'svelte/transition'
@@ -1737,17 +1725,17 @@ Here's a simplified version of a custom FLIP animation I _yoinked_ from the Svel
 ```ts:animations.ts
 function flip(node, { from, to }, params) {
 	const dx = from.left - to.left
-  const dy = from.top - to.top
-  const dsx = from.width / to.width
-  const dsy = from.height / to.height
+	const dy = from.top - to.top
+	const dsx = from.width / to.width
+	const dsy = from.height / to.height
 
 	return {
-		duration: params.duration || 1000,
+		duration: params.duration || 2000,
 		css: (t, u) => {
 			const x = dx * u
-    	const y = dy * u
+			const y = dy * u
 			const sx = dsx + (1 - dsx) * t
-      const sy = dsy + (1 - dsy) * t
+			const sy = dsy + (1 - dsy) * t
 			return `transform: translate(${x}px, ${y}px) scale(${sx}, ${sy})`
 		}
 	}
@@ -1764,7 +1752,7 @@ This is where the `Tween` and `Spring` classes come in handy.
 
 The `Tween` class accepts a target value and options. You can use the `current` property to get the current value, and `target` to update the value:
 
-```svelte:App.svelte
+```svelte:App.svelte {2,5,8,12,22}
 <script>
 	import { Tween } from 'svelte/motion'
 	import { cubicInOut } from 'svelte/easing'
@@ -1794,7 +1782,7 @@ The `Tween` class accepts a target value and options. You can use the `current` 
 
 The `Tween` class has the same methods as `Tween`, but uses spring physics and doesn't have a duration. Instead, it has `stiffness`, `damping`, and `precision` options:
 
-```svelte:App.svelte
+```svelte:App.svelte {2,4,7,11,21}
 <script>
 	import { Spring } from 'svelte/motion'
 
@@ -1821,7 +1809,7 @@ The `Tween` class has the same methods as `Tween`, but uses spring physics and d
 </svg>
 ```
 
-They both have a `set` function if you want to update the value and override the options, which also returns a promise:
+They both have a `set` function which returns a promise and lets you override the options:
 
 ```ts:App.svelte
 async function onmousedown() {
@@ -1840,8 +1828,8 @@ If you want to update the `Tween` or `Spring` value when a reactive value change
 
 	let { value, options } = $props()
 
-	const tweenSize = Tween.of(() => value, options)
-	const springSize = Spring.of(() => value, options)
+	Tween.of(() => value, options)
+	Spring.of(() => value, options)
 </script>
 ```
 

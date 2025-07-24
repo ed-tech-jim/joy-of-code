@@ -1835,115 +1835,252 @@ If you want to update the `Tween` or `Spring` value when a reactive value change
 
 ## Integrating Third Party Libraries With Svelte
 
-Using Svelte, you have the entire JavaScript ecosystem at your fingertips when a package isn't available. In this section, we're going to learn how to integrate third party JavaScript libraries using Svelte's component and element-level lifecycle functions.
+If a specific Svelte package isn't available, you have the entire JavaScript ecosystem at your fingertips. In this section, we're going to learn methods at your disposal you can use to integrate third party JavaScript libraries with Svelte.
 
-So far we got used to Svelte's declarative syntax and reactivity, but third party JavaScript libraries usually require access to the DOM, and they don't understand Svelte's reactivity.
+### Component Lifecycle Functions
 
-In this example, we're going to use the [Tippy](https://atomiks.github.io/tippyjs/) library to create a tooltip when you hover over a button, so let's install the package using `npm` (if you're following along in the Svelte Playground, you can skip this and use imports directly):
+So far, we got used to Svelte's declarative syntax and reactivity. Unfortunately, third-party JavaScript libraries usually require direct access to the DOM, and they don't understand Svelte's reactivity.
 
-```console:install
-npm i tippy.js
-```
+Let's look at how we can use the popular [GSAP](https://gsap.com/) JavaScript animation library in Svelte. You can install GSAP with `npm i gsap` (if you're using the Svelte Playground, you can skip this and use imports directly).
 
-Some libraries have framework wrappers you can use, but in this case we're unlucky. Anyhow, here is the basic usage example from their docs (simplified to resemble a Svelte component):
+Here's a basic GSAP example for creating a tween animation:
 
 ```html:index.html
 <script type="module">
-	import tippy from 'tippy.js'
-	import 'tippy.js/dist/tippy.css'
+	import gsap from 'gsap'
 
-	tippy('#myButton', {
-		content: 'My tooltip!',
-	})
+	gsap.to('.box', { rotation: 180, x: 100, duration: 1 })
 </script>
 
-<button id="myButton">Tooltip</button>
-```
+<div class="box"></div>
 
-We can notice the `tippy` function accepts an element, and an options object with a `content` property as arguments. Let's translate the example to Svelte and make sure it works, before we make it reusable.
-
-Because the `<script>` part in Svelte runs before the component is added to the DOM, the `buttonEl` is going to be `undefined`. Using the `onMount` lifecycle function, we can run the code when the component is added. You can also return a cleanup function from `onMount` which runs when the component is removed, or use the `onDestroy` lifecycle function:
-
-```svelte:App.svelte
-<script>
-	import { onMount } from 'svelte'
-	import tippy from 'tippy.js'
-	import 'tippy.js/dist/tippy.css'
-
-	let buttonEl
-
-	onMount(() => {
-		const tooltip = tippy(buttonEl, { content })
-		return () => tooltip.destroy()
-	})
-</script>
-
-<button bind:this={buttonEl}>Tooltip</button>
-```
-
-Can you think of a way to update the tooltip content without using an effect? If we read the Tippy docs, we can learn it has a `setContent` method on the instance, so we just need a way to update it:
-
-```svelte:App.svelte
-<script>
-	import { onMount } from 'svelte'
-	import tippy from 'tippy.js'
-	import 'tippy.js/dist/tippy.css'
-
-	let buttonEl
-	let tooltip
-	let content = $state('My tooltip!')
-
-	onMount(() => {
-		tooltip = tippy(buttonEl, { content })
-		return () => tooltip.destroy()
-	})
-
-	function updateTooltip(e) {
-		tooltip.setContent(e.target.value)
+<style>
+	.box {
+		width: 100px;
+		height: 100px;
+		background-color: red;
+		border-radius: 1rem;
 	}
-</script>
-
-<input oninput={updateTooltip} />
-
-<button bind:this={buttonEl}>Tooltip</button>
+</style>
 ```
 
-And of course, you could bind the value and use an effect to track when it updates to recreate the tooltip:
+If you tried this example in Svelte, you would get a `GSAP target .box not found.` warning. This is because the `<script>` part runs first in Svelte, before the component is added to the DOM.
 
-```svelte:App.svelte
+For this reason, Svelte provides an `onMount` lifecycle function. The "lifecyle" part refers to the life of the component, since it accepts a callback that runs when it's added and removed:
+
+```svelte:App.svelte {2,5-7}
 <script>
-	import tippy from 'tippy.js'
-	import 'tippy.js/dist/tippy.css'
+	import { onMount } from 'svelte'
+	import gsap from 'gsap'
 
-	let buttonEl
-	let content = $state('My tooltip!')
+	onMount(() => {
+		gsap.to('.box', { rotation: 180, x: 100, duration: 1 })
+	})
+</script>
+
+<div class="box"></div>
+
+<style>
+	.box {
+		width: 100px;
+		height: 100px;
+		background-color: red;
+		border-radius: 1rem;
+	}
+</style>
+```
+
+This works! That being said, it's not ideal that we query any element with a `.box` class on the page.
+
+Using Svelte, we should get a reference to the element instead. I also want to show you that you can return a function from `onMount` or use the `onDestroy` lifecycle function for any cleanup when the component is removed:
+
+```svelte:App.svelte {2,5,8-9,13-15,18}
+<script>
+	import { onDestroy, onMount } from 'svelte'
+	import gsap from 'gsap'
+
+	let tween
+	let target
+
+	onMount(() => {
+		tween = gsap.to(target, { rotation: 180, x: 100, duration: 1 })
+		return () => tween.kill()
+	})
+
+	// alternative cleanup
+	onDestroy(() => {
+		tween.kill()
+	})
+</script>
+
+<div bind:this={target}></div>
+
+<style>
+	.box {
+		width: 100px;
+		height: 100px;
+		background-color: red;
+		border-radius: 1rem;
+	}
+</style>
+```
+
+### Effects Versus Lifecycle Functions
+
+You can also use effects to achieve the same thing:
+
+```svelte:App.svelte {6,8-11,14}
+<script>
+	import gsap from 'gsap'
+
+	let tween
+	let target
 
 	$effect(() => {
-		const tooltip = tippy(buttonEl, { content })
-		return () => tooltip.destroy()
+		tween = gsap.to(target, { rotation: 180, x: 100, duration: 1 })
+		return () => tween.kill()
 	})
 </script>
 
-<input bind:value={content} />
+<div bind:this={target}></div>
 
-<button bind:this={buttonEl}>Tooltip</button>
+<style>
+	.box {
+		width: 100px;
+		height: 100px;
+		background-color: red;
+		border-radius: 1rem;
+	}
+</style>
 ```
 
-I just wanted to show you that you don't have to use an effect. You might track a reactive value inside of the effect on accident, and then you have to [untrack](https://svelte.dev/docs/svelte/svelte#untrack) it which makes everything more complicated:
+So why do both of them exist?
 
-```svelte:App.svelte
+Effects aren't lifecycle functions because their "lifecycle" depends on the value inside of them updating. You could end up tracking some state inside of the effect and then have to [untrack](https://svelte.dev/docs/svelte/svelte#untrack) the value:
+
+```svelte:example
 import { untrack } from 'svelte'
 
-let valueYouDontWantToBeTracked = $state('')
-let valueYouWantToBeTracked = $state('')
+let value_you_dont_want_to_track = $state('')
+let value_you_want_to_track = $state('')
 
 $effect(() => {
-	untrack(() => valueYouDontWantToBeTracked)
-	console.log(valueYouWantToBeTracked)
+	untrack(() => value_you_dont_want_to_track)
+	console.log(value_you_want_to_track)
 })
 ```
 
-It's your choice, of course.
+It's your choice, of course! If you understand how `$effect` works, you won't get unexpected surprises.
+
+Alright, our code works! Let's go a step further and create a `<Tween>` component which accepts `tween`, `vars` and `children` as props:
+
+```svelte:Tween.svelte
+<script lang="ts">
+	import gsap from 'gsap'
+	import type { Snippet } from 'svelte'
+
+	type Props = {
+		tween: gsap.core.Tween
+		vars: gsap.TweenVars
+		children?: Snippet
+	}
+
+	let { tween = $bindable(), vars, children }: Props = $props()
+	let target: HTMLElement
+
+	$effect(() => {
+		tween = gsap.to(target, vars)
+		return () => tween.kill()
+	})
+</script>
+
+<div bind:this={target}>
+	{@render children?.()}
+</div>
+```
+
+This gives us a generic animation component we can pass any element to, and bind the `tween` prop to get the animation controls:
+
+```svelte:App.svelte
+<script lang="ts">
+	import Tween from './Tween.svelte'
+
+	let animation: gsap.core.Tween
+</script>
+
+
+<Tween bind:tween={animation} vars={{ rotation: 180, x: 100, duration: 1 }}>
+	<div class="box"></div>
+</Tween>
+
+<button onclick={() => animation.restart()}>Play</button>
+
+<style>
+	.box {
+		width: 100px;
+		height: 100px;
+		background-color: #ff4500;
+		border-radius: 1rem;
+	}
+</style>
+```
+
+### Element Lifecycle Functions Using Attachments
+
+So far we learned how we can use `onMount` to get a reference to an element when the component is added. What if you had `onMount` for elements instead of components? You would have attachments.
+
+Attachments are functions you can "attach" to regular elements that run when the element is added to the DOM, or when state inside of them updates:
+
+```svelte:example {2,8-15}
+<script>
+	let color = $state('#ff4500')
+</script>
+
+<canvas
+	width={400}
+	height={400}
+	{@attach (canvas) => {
+		const context = canvas.getContext('2d')
+
+		$effect(() => {
+			context.fillStyle = color
+			context.fillRect(0, 0, canvas.width, canvas.height)
+		})
+	}}
+></canvas>
+```
+
+Instead of the animation component, we can create an attachment function which can be used on any element. The `tween` function accept the animations options and an optional callback to get a reference to the tween:
+
+```svelte:App.svelte
+<script lang="ts">
+	import { gsap } from 'gsap'
+
+	function tween(vars, ref) {
+		let tween: gsap.core.Tween
+
+		return (target: HTMLElement) => {
+			tween = gsap.to(target, vars)
+			ref?.(tween)
+			return () => tween.kill()
+		}
+	}
+
+	let animation: gsap.core.Tween
+</script>
+
+<div
+	{@attach tween(
+		{ rotation: 180, x: 100, duration: 1 },
+		(tween) => animation = tween
+	)}
+	class="box"
+></div>
+
+<button onclick={() => animation.restart()}>Play</button>
+```
+
+A cool idea would be to have different attachments like `{@attach tween.from(...)}` or `{@attach tween.to(...)}`. The fun comes from picking the API shape you want that works in harmony with Svelte.
 
 ## Integrating External Event-Based Systems With Svelte
 

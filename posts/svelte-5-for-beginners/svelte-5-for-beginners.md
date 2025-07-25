@@ -6,6 +6,10 @@ published: '2025-7-14'
 category: svelte
 ---
 
+<script lang="ts">
+	import Card from '$lib/components/card.svelte'
+</script>
+
 ## Table of Contents
 
 ## What is Svelte?
@@ -224,13 +228,15 @@ The last rune you should know about is the `$effect` rune. Effects are functions
 </button>
 ```
 
-{% warning text="You can use the [$inspect](https://svelte.dev/docs/svelte/$inspect) rune instead of effects to log when a reactive value updates." %}
+<Card type="info">
+	You can use the <a href="https://svelte.dev/docs/svelte/$inspect" target="_blank">$inspect</a> rune instead of effects to log when a reactive value updates.
+</Card>
 
 **You should never use effects for updating state** because Svelte queues effects and runs them after everything is updated.
 
 Here's an example how using effects to synchronize state can cause unexpected behavior:
 
-```svelte:App.svelte {3-7,12-13}
+```svelte:App.svelte {3,5-7,12-13}
 <script>
 	let count = $state(0)
 	let double = $state(0)
@@ -265,7 +271,9 @@ Here's an example how using effects to synchronize state can cause unexpected be
 </button>
 ```
 
-{% warning text="Derived values are effects under the hood, but they rerun immediately when their dependencies change." %}
+<Card type="info">
+	Derived values are effects under the hood, but they rerun immediately when their dependencies change.
+</Card>
 
 Effects should only be used for side-effects like fetching data from an API, working with the DOM directly, or to synchronize with an external system that doesn't understand Svelte's reactivity:
 
@@ -380,7 +388,9 @@ To loop over a list of items, you use the `#each` block:
 </ul>
 ```
 
-{% info text="The else clause is optional." %}
+<Card type="info">
+	The <code>else</code> clause is optional.
+</Card>
 
 You can [destructure](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Destructuring_assignment) the items values you're iterating over, get the current item index and provide a key, so Svelte can keep track of changes:
 
@@ -1858,7 +1868,7 @@ Here's a basic GSAP example for creating a tween animation:
 	.box {
 		width: 100px;
 		height: 100px;
-		background-color: red;
+		background-color: orangered;
 		border-radius: 1rem;
 	}
 </style>
@@ -1884,7 +1894,7 @@ For this reason, Svelte provides an `onMount` lifecycle function. The "lifecyle"
 	.box {
 		width: 100px;
 		height: 100px;
-		background-color: red;
+		background-color: orangered;
 		border-radius: 1rem;
 	}
 </style>
@@ -1894,7 +1904,7 @@ This works! That being said, it's not ideal that we query any element with a `.b
 
 Using Svelte, we should get a reference to the element instead. I also want to show you that you can return a function from `onMount` or use the `onDestroy` lifecycle function for any cleanup when the component is removed:
 
-```svelte:App.svelte {2,5,8-9,13-15,18}
+```svelte:App.svelte {2,5,10,13-16,19}
 <script>
 	import { onDestroy, onMount } from 'svelte'
 	import gsap from 'gsap'
@@ -1919,7 +1929,7 @@ Using Svelte, we should get a reference to the element instead. I also want to s
 	.box {
 		width: 100px;
 		height: 100px;
-		background-color: red;
+		background-color: orangered;
 		border-radius: 1rem;
 	}
 </style>
@@ -1929,7 +1939,7 @@ Using Svelte, we should get a reference to the element instead. I also want to s
 
 You can also use effects to achieve the same thing:
 
-```svelte:App.svelte {6,8-11,14}
+```svelte:App.svelte {5,7-10,13}
 <script>
 	import gsap from 'gsap'
 
@@ -1948,7 +1958,7 @@ You can also use effects to achieve the same thing:
 	.box {
 		width: 100px;
 		height: 100px;
-		background-color: red;
+		background-color: orangered;
 		border-radius: 1rem;
 	}
 </style>
@@ -1958,7 +1968,7 @@ So why do both of them exist?
 
 Effects aren't lifecycle functions because their "lifecycle" depends on the value inside of them updating. You could end up tracking some state inside of the effect and then have to [untrack](https://svelte.dev/docs/svelte/svelte#untrack) the value:
 
-```svelte:example
+```ts:example
 import { untrack } from 'svelte'
 
 let value_you_dont_want_to_track = $state('')
@@ -2008,7 +2018,6 @@ This gives us a generic animation component we can pass any element to, and bind
 	let animation: gsap.core.Tween
 </script>
 
-
 <Tween bind:tween={animation} vars={{ rotation: 180, x: 100, duration: 1 }}>
 	<div class="box"></div>
 </Tween>
@@ -2033,7 +2042,7 @@ Attachments are functions you can "attach" to regular elements that run when the
 
 ```svelte:example {2,8-15}
 <script>
-	let color = $state('#ff4500')
+	let color = $state('orangered')
 </script>
 
 <canvas
@@ -2052,7 +2061,7 @@ Attachments are functions you can "attach" to regular elements that run when the
 
 Instead of the animation component, we can create an attachment function which can be used on any element. The `tween` function accept the animations options and an optional callback to get a reference to the tween:
 
-```svelte:App.svelte
+```svelte:App.svelte {4-12,18-21}
 <script lang="ts">
 	import { gsap } from 'gsap'
 

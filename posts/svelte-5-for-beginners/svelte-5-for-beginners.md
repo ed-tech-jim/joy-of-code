@@ -2091,22 +2091,211 @@ Instead of the animation component, we can create an attachment function which c
 
 A cool idea would be to have different attachments like `{@attach tween.from(...)}` or `{@attach tween.to(...)}`. The fun comes from picking the API shape you want that works in harmony with Svelte.
 
-## Integrating External Event-Based Systems With Svelte
+## Integrating Event-Based Systems With Svelte
 
-There's something you have to be aware of when creating effects outside of Svelte components and why they're generally discouraged.
+This is a more advanced topic, but I think it's useful to know whenever you're trying to make an external system reactive in Svelte.
 
-And to be honest, this is fine. So what is the downside of this approach? The problem is that you're going to run into this error when you create the effect outside of a Svelte component:
+An external event is any event you can subscribe to and listen for changes. For example, let's say I want to create a GSAP animation timeline that I can control with state.
+
+Let's start by creating the GSAP timeline:
+
+```svelte:App.svelte
+<script lang="ts">
+	import { onMount } from 'svelte'
+	import gsap from 'gsap'
+
+	type Tween = [string | HTMLElement, gsap.TweenVars]
+
+	class Timeline {
+		#timeline = gsap.timeline()
+
+		constructor(tweens: Tween[]) {
+			this.populateTimeline(tweens)
+		}
+
+		populateTimeline(tweens: Tween[]) {
+			onMount(() => {
+				tweens.forEach(([element, vars]) => {
+					this.#timeline.to(element, vars)
+				})
+			})
+		}
+	}
+
+	const tl = new Timeline([
+		['.box1', { x: 200, duration: 1 }],
+		['.box2', { x: 200, duration: 1 }]
+	])
+</script>
+
+<div class="box box1"></div>
+<div class="box box2"></div>
+
+<style>
+	.box {
+		aspect-ratio: 1;
+		width: 100px;
+		background-color: orangered;
+		border-radius: 1rem;
+	}
+</style>
+```
+
+The next step is to subscribe for updates using `eventCallback` from GSAP. Because we need to synchronize with an external system, we need an effect so when we update the time, it updates the playhead and causes `onUpdate` to fire:
+
+```svelte:App.svelte {9,14-16,18-20,31-33,35-37,48}
+<script lang="ts">
+	import { onMount } from 'svelte'
+	import gsap from 'gsap'
+
+	type Tween = [string | HTMLElement, gsap.TweenVars]
+
+	class Timeline {
+		#timeline = gsap.timeline()
+		#time = $state(0)
+
+		constructor(tweens: Tween[]) {
+			this.populateTimeline(tweens)
+
+			$effect(() => {
+				this.#timeline.seek(this.#time)
+			})
+
+			this.#timeline.eventCallback('onUpdate', () => {
+				this.#time = this.#timeline.time()
+			})
+		}
+
+		populateTimeline(tweens: Tween[]) {
+			onMount(() => {
+				tweens.forEach(([element, vars]) => {
+					this.#timeline.to(element, vars)
+				})
+			})
+		}
+
+		get time() {
+			return this.#time
+		}
+
+		set time(v) {
+			this.#time = v
+		}
+	}
+
+	const tl = new Timeline([
+		['.box1', { x: 200, duration: 1 }],
+		['.box2', { x: 200, duration: 1 }]
+	])
+</script>
+
+<label>
+	<p>Time:</p>
+	<input bind:value={tl.time} type="range" min={0} max={2} step={0.01} />
+</label>
+
+<div class="box box1"></div>
+<div class="box box2"></div>
+
+<style>
+	.box {
+		aspect-ratio: 1;
+		width: 100px;
+		background-color: orangered;
+		border-radius: 1rem;
+	}
+</style>
+```
+
+So what is the downside of this approach? If you create an effect outside of a Svelte component, you might run into an effect orphan error in the constructor:
+
+```ts:timeline.ts
+export const tl = new Timeline(...) // ⚠️ effect orphan
+```
 
 The reason this happens is because effects need to be inside a parent root effect. This is how Svelte keeps track of every effect and knows what to cleanup when the component is removed from the DOM.
 
 There's an advanced [$effect.root](https://svelte.dev/docs/svelte/$effect#$effect.root) rune you can use and provide a manual cleanup, but **I'm only telling you this if you encounter it because you should never have to use it.**
 
-Alright, so how can we improve this?
+Not only that, but we're not doing any cleanup for the event either!
 
-First, it would make more sense to read the value from local storage when we read the value for the first time — same goes for updating the value. This would help prevent creating the effect outside the component, but now we're creating an effect each time we read and update the value. 😔
+Alright, so how can we improve this? It makes more sense to create the effect when we read the value. This creates another problem, because we're creating an effect each time we read the value:
 
-## Todo
+```ts:example
+// ...
+get time() {
+	// oops 😅
+	$effect(() => {
+		this.#timeline.seek(this.#time)
+	})
+	return this.#time
+}
+```
 
-- Module context
-- Special elements
-- Deployment
+Thankfully, Svelte has a [createSubscriber](https://svelte.dev/docs/svelte/svelte-reactivity#createSubscriber) function you can use to create a subscriber to subscribe to! The `createSubscriber` function provides a callback which gives you an `update` function. When `update` is invoked, it reruns the subscriber. In our example, the subscriber is the `time` method:
+
+```svelte:App.svelte {10,14-17,28-31,33-35}
+<script lang="ts">
+	import { onMount } from 'svelte'
+	import { createSubscriber } from 'svelte/reactivity'
+	import gsap from 'gsap'
+
+	type Tween = [string | HTMLElement, gsap.TweenVars]
+
+	class Timeline {
+		#timeline = gsap.timeline()
+		#subscribe
+
+		constructor(tweens: Tween[]) {
+			this.populateTimeline(tweens)
+			this.#subscribe = createSubscriber((update) => {
+				this.#timeline.eventCallback('onUpdate', update)
+				return () => this.#timeline.eventCallback('onUpdate', null)
+			})
+		}
+
+		populateTimeline(tweens: Tween[]) {
+			onMount(() => {
+				tweens.forEach(([element, vars]) => {
+					this.#timeline.to(element, vars)
+				})
+			})
+		}
+
+		get time() {
+			this.#subscribe()
+			return this.#timeline.time()
+		}
+
+		set time(v) {
+			this.#timeline.seek(v)
+		}
+	}
+
+	const tl = new Timeline([
+		['.box1', { x: 200, duration: 1 }],
+		['.box2', { x: 200, duration: 1 }]
+	])
+</script>
+
+<label>
+	<p>Time:</p>
+	<input bind:value={tl.time} type="range" min={0} max={2} step={0.01} />
+</label>
+
+<div class="box box1"></div>
+<div class="box box2"></div>
+
+<style>
+	.box {
+		aspect-ratio: 1;
+		width: 100px;
+		background-color: orangered;
+		border-radius: 1rem;
+	}
+</style>
+```
+
+This makes our code much simpler. We don't need extra state to keep track of the time. Instead, we can just return and set the current time for the timeline using the methods it provides. Also, we can easily do a cleanup! 🧹
+
+How it works is that `createSubscriber` uses an effect that watches a value that increments when `update` runs, and reruns subscribers while keeping track of the active effects.

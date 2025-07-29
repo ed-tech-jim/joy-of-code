@@ -30,7 +30,33 @@ If you're a creature of comfort and prefer your development environment, you can
 
 I also recommend using the [Svelte for VS Code extension](https://marketplace.visualstudio.com/items?itemName=svelte.svelte-vscode) for syntax highlighting and code completion, or a similar extension for your editor.
 
-## Single File Components
+## TypeScript Aside
+
+[TypeScript](https://www.typescriptlang.org/) has become table stakes when it comes to frontend development. For that reason, the examples are going to use TypeScript, but you can use JavaScript if you prefer.
+
+If you never used TypeScript, code after `:` usually represents a type. TypeScript code is valid JavaScript code (unless a couple of things we're not going to use), so you can just remove the types and your code will work:
+
+```ts:example.ts
+// TypeScript 👍️
+let items: string[] = [...]
+
+// JavaScript 👍️
+let items = [...]
+```
+
+Some developers prefer writing JavaScript with [JSDoc](https://jsdoc.app/) comments because it gives you the same benefits of TypeScript at the cost of a more verbose syntax:
+
+```ts:example.ts
+/**
+ * This is a list of items.
+ * @type {string[]}
+ */
+let items = [...]
+```
+
+That is completely up to you!
+
+## Do You Even Need Frameworks?
 
 Let's start with a simple counter example using regular HTML and JavaScript:
 
@@ -51,6 +77,10 @@ Let's start with a simple counter example using regular HTML and JavaScript:
 
 Having to keep track of state and [Document Object Model (DOM)](https://developer.mozilla.org/en-US/docs/Web/API/Document_Object_Model) updates is tedious even in the glorious age of AI.
 
+**You can think of Svelte as HTML with superpowers.**
+
+You write code in a **declarative** way like HTML, but you don't have to think about querying elements and keeping the state of your application in sync with the user interface.
+
 Let's look at the same example in Svelte:
 
 ```svelte:App.svelte
@@ -68,13 +98,127 @@ Let's look at the same example in Svelte:
 
 Don't worry if you don't understand the code yet, we'll go over it in the next section.
 
-**You can think of Svelte as HTML with superpowers.**
+## Single File Components
 
-You write code in a **declarative** way like HTML, but you don't have to think about querying elements and keeping the state of your application in sync with the user interface.
+In Svelte, files ending with `.svelte` are called **single file components** because they contain the JavaScript, HTML, and CSS in a single file. They can only contain one `<script>` tag and one `<style>` tag.
 
-In Svelte, files ending with `.svelte` are called **single file components** because the JavaScript, HTML, and CSS are contained inside a single file.
+Here's an example of a Svelte component:
 
-You can use JavaScript expressions like `{count === 1 ? 'time' : 'times'}` in the template, but we're also going to look into using logic blocks like `if` and `each` to conditionally render content.
+```svelte:App.svelte
+<!-- logic -->
+<script lang="ts">
+	let banana = '🍌'
+</script>
+
+<!-- markup -->
+<h1>I offer you a {banana}! 🦍</h1>
+
+<!-- styles -->
+<style>
+	h1 {
+		color: orangered;
+	}
+</style>
+```
+
+### Logic
+
+Your component logic goes inside the `<script>` tag. Since Svelte 5, TypeScript is [natively supported](https://svelte.dev/docs/kit/integrations):
+
+```svelte:App.svelte
+<script lang="ts">
+	let banana = '🍌'
+</script>
+
+<h1>I offer you a {banana as string}! 🦍</h1>
+```
+
+Later we're going to learn how you can even have logic inside your markup to avoid creating components for simple cases.
+
+### Markup
+
+In Svelte, anything that's not in the `<script>` and `<style>` tags is considered markup:
+
+```svelte:App.svelte
+<!-- markup -->
+<h1>I offer you a {banana}! 🦍</h1>
+```
+
+You can use JavaScript expressions in the template using curly braces and Svelte is going to evalute it:
+
+```svelte:App.svelte
+<script>
+	let count = 1
+</script>
+
+{count === 1 ? 'time' : 'times'}
+```
+
+Later we're going to learn about logic blocks like `if` and `each` to conditionally render content.
+
+Tags that have lowercase names are treated like regular HTML elements by Svelte and accept attributes:
+
+```svelte:App.svelte
+<script lang="ts">
+	let src = 'image.gif'
+	let alt = 'Man dancing'
+</script>
+
+<img src={src} alt={alt} />
+```
+
+If the attribute name shares the same name as the value, you can use the shorthand version:
+
+```svelte:App.svelte
+<img {src} {alt} />
+```
+
+Attributes can also have expressions inside of them:
+
+```svelte:App.svelte
+<script lang="ts">
+	let src = 'image.gif'
+	let alt = 'Man dancing'
+	let lazy = true
+</script>
+
+<img src={src} alt={alt} loading={lazy ? 'lazy' : 'eager'} />
+```
+
+If you want to conditionally render attributes, don't use short-circuit evaluation and empty strings. Instead, use `null` or `undefined` as the value:
+
+```svelte:App.svelte
+<script lang="ts">
+	let src = 'image.gif'
+	let alt = 'Man dancing'
+	let lazy = false
+</script>
+
+<!-- ⛔️ `loading` is `false` -->
+<img src={src} alt={alt} loading={lazy && 'lazy'} />
+<!-- ⛔️ orphan `loading` prop -->
+<img src={src} alt={alt} loading={lazy ? 'lazy' : ''} />
+
+<!-- 👍 no `loading` prop -->
+<img src={src} alt={alt} loading={lazy ? 'lazy' : null} />
+<!-- 👍 no `loading` prop -->
+<img src={src} alt={alt} loading={lazy ? 'lazy' : undefined} />
+```
+
+You can spread attributes on elements:
+
+```svelte:App.svelte
+<script lang="ts">
+	let obj = {
+		src: 'image.gif',
+		alt: 'Man dancing'
+	}
+</script>
+
+<img {...obj} />
+```
+
+### Styles
 
 Let's create a `<style>` tag to add some styles:
 
@@ -112,10 +256,10 @@ To make your styles global inside a component, you can use the `global` modifier
 </style>
 ```
 
-You can preprocess the styles with [SCSS](https://sass-lang.com/) by simply adding `lang="scss"` to the `<style>` tag, or use TypeScript by adding `lang="ts"` to the `<script>` tag:
+You can preprocess the styles with [SCSS](https://sass-lang.com/) by simply adding `lang="scss"` to the `<style>` tag:
 
 ```svelte:App.svelte
-<script>
+<script lang="ts">
 	let count: number = 0
 </script>
 

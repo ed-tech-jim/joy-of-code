@@ -34,7 +34,7 @@ I also recommend using the [Svelte for VS Code extension](https://marketplace.vi
 
 [TypeScript](https://www.typescriptlang.org/) has become table stakes when it comes to frontend development. For that reason, the examples are going to use TypeScript, but you can use JavaScript if you prefer.
 
-If you never used TypeScript, code after `:` usually represents a type. TypeScript code is valid JavaScript code (unless a couple of things we're not going to use), so you can just remove the types and your code will work:
+If you're unfamiliar with TypeScript, code after `:` usually represents a type. You can omit the types and your code will work:
 
 ```ts:example.ts
 // TypeScript 👍️
@@ -61,13 +61,13 @@ That is completely up to you!
 Let's start with a simple counter example using regular HTML and JavaScript:
 
 ```svelte:app.html
-<script>
-	let count = 0
+<script type="module">
+	let banana = 0
 	let text = document.querySelector('p')
 
 	function increment() {
-		count++
-		text.innerText = `Clicked ${count} ${count === 1 ? 'time' : 'times'}`
+		banana++
+		text.innerText = `Clicked ${banana} ${banana === 1 ? 'time' : 'times'}`
 	}
 </script>
 
@@ -84,23 +84,23 @@ You write code in a **declarative** way like HTML, but you don't have to think a
 Let's look at the same example in Svelte:
 
 ```svelte:App.svelte
-<script>
-	let count = $state(0)
+<script lang="ts">
+	let banana = $state(0)
 
 	function increment() {
-		count++
+		banana++
 	}
 </script>
 
-<p>Clicked {count} {count === 1 ? 'time' : 'times'}</p>
-<button onclick={increment}>Click</button>
+<p>Clicked {banana} {banana === 1 ? 'time' : 'times'}</p>
+<button onclick={increment}>🍌</button>
 ```
 
-Don't worry if you don't understand the code yet, we'll go over it in the next section.
+Don't worry if you don't understand the code yet! In the next section, we'll go over it in more detail.
 
 ## Single File Components
 
-In Svelte, files ending with `.svelte` are called **single file components** because they contain the JavaScript, HTML, and CSS in a single file. They can only contain one `<script>` tag and one `<style>` tag.
+In Svelte, files ending with `.svelte` are called **single file components** because they contain the JavaScript, HTML, and CSS in a single file.
 
 Here's an example of a Svelte component:
 
@@ -111,7 +111,7 @@ Here's an example of a Svelte component:
 </script>
 
 <!-- markup -->
-<h1>I offer you a {banana}! 🦍</h1>
+<h1>Here's a {banana}! 🦍</h1>
 
 <!-- styles -->
 <style>
@@ -121,7 +121,11 @@ Here's an example of a Svelte component:
 </style>
 ```
 
-### Logic
+A Svelte component can only have one `<script>` and `<style>` block and is unique for every component instance. **The order of the blocks doesn't matter**.
+
+There's also a special `<script module>` block used for sharing code across component instances we'll learn about later.
+
+## The Brains Of Your Component
 
 Your component logic goes inside the `<script>` tag. Since Svelte 5, TypeScript is [natively supported](https://svelte.dev/docs/kit/integrations):
 
@@ -130,33 +134,33 @@ Your component logic goes inside the `<script>` tag. Since Svelte 5, TypeScript 
 	let banana = '🍌'
 </script>
 
-<h1>I offer you a {banana as string}! 🦍</h1>
+<h1>Here's a {banana as string}! 🦍</h1>
 ```
 
-Later we're going to learn how you can even have logic inside your markup to avoid creating components for simple cases.
+Later we're going to learn how you can even define values inside your markup which can be helpful in some cases.
 
-### Markup
+## The Poetry In The Markup
 
-In Svelte, anything that's not in the `<script>` and `<style>` tags is considered markup:
+In Svelte, anything that's outside the `<script>` and `<style>` block is considered markup:
 
 ```svelte:App.svelte
 <!-- markup -->
-<h1>I offer you a {banana}! 🦍</h1>
+<h1>Here's a {banana}! 🦍</h1>
 ```
 
 You can use JavaScript expressions in the template using curly braces and Svelte is going to evalute it:
 
 ```svelte:App.svelte
 <script>
-	let count = 1
+	let banana = 1
 </script>
 
-{count === 1 ? 'time' : 'times'}
+{banana === 1 ? 'banana' : 'bananas'}
 ```
 
 Later we're going to learn about logic blocks like `if` and `each` to conditionally render content.
 
-Tags that have lowercase names are treated like regular HTML elements by Svelte and accept attributes:
+Tags with lowercase names are treated like regular HTML elements by Svelte and accept attributes:
 
 ```svelte:App.svelte
 <script lang="ts">
@@ -167,13 +171,13 @@ Tags that have lowercase names are treated like regular HTML elements by Svelte 
 <img src={src} alt={alt} />
 ```
 
-If the attribute name shares the same name as the value, you can use the shorthand version:
+You can use a shorthand attribute if the attribute name and value are the same:
 
 ```svelte:App.svelte
 <img {src} {alt} />
 ```
 
-Attributes can also have expressions inside of them:
+Attributes can also have expressions inside the curly braces:
 
 ```svelte:App.svelte
 <script lang="ts">
@@ -185,7 +189,7 @@ Attributes can also have expressions inside of them:
 <img src={src} alt={alt} loading={lazy ? 'lazy' : 'eager'} />
 ```
 
-If you want to conditionally render attributes, don't use short-circuit evaluation and empty strings. Instead, use `null` or `undefined` as the value:
+If you want to conditionally render attributes, don't use `&&` for short-circuit evaluation or empty strings. Instead, use `null` or `undefined` as the value:
 
 ```svelte:App.svelte
 <script lang="ts">
@@ -194,18 +198,16 @@ If you want to conditionally render attributes, don't use short-circuit evaluati
 	let lazy = false
 </script>
 
-<!-- ⛔️ `loading` is `false` -->
+<!-- ⛔️ -->
 <img src={src} alt={alt} loading={lazy && 'lazy'} />
-<!-- ⛔️ orphan `loading` prop -->
 <img src={src} alt={alt} loading={lazy ? 'lazy' : ''} />
 
-<!-- 👍 no `loading` prop -->
+<!-- 👍 -->
 <img src={src} alt={alt} loading={lazy ? 'lazy' : null} />
-<!-- 👍 no `loading` prop -->
 <img src={src} alt={alt} loading={lazy ? 'lazy' : undefined} />
 ```
 
-You can spread attributes on elements:
+Attributes can be also spread on elements:
 
 ```svelte:App.svelte
 <script lang="ts">
@@ -218,55 +220,259 @@ You can spread attributes on elements:
 <img {...obj} />
 ```
 
-### Styles
+## The Styles Of Your Component
 
-Let's create a `<style>` tag to add some styles:
+There are many ways you can style a Svelte component. I've heard people love inline styles with [Tailwind CSS](https://tailwindcss.com/), so you could just use the `style` tag...I'm joking! 😄
 
-```svelte:App.svelte
-<style>
-	p {
-		color: red;
-	}
-</style>
-```
+### The Style Tag
 
-Styles are scoped to the component by default. This means that styles used in one component aren't going to affect styles in other components. If you look at the CSS output in the Svelte Playground, you can see Svelte generated a unique class name for the styles `p.svelte-omwhvp {color: red }`.
-
-To make your styles global inside a component, you can use the `global` modifier `:global(p)`. Having to use `:global(selector)` for everything is tedious, so you can nest everything inside the `:global { ... }` block. You can also have "scoped global styles" by saying `.prose :global(p)`:
-
-```svelte:App.svelte
-<style>
-	/* global styles */
-	:global(p) {
-		color: red;
-	}
-
-	/* global block */
-	.prose :global {
-		p {
-			color: red;
-		}
-		/* ... */
-	}
-
-	/* scoped global styles */
-	.prose :global(p) {
-		color: red;
-	}
-</style>
-```
-
-You can preprocess the styles with [SCSS](https://sass-lang.com/) by simply adding `lang="scss"` to the `<style>` tag:
+That being said, the `style` tag can be useful. You can use the `style` attribute like in regular HTML, but Svelte also has a shorthand `style:` directive you can use. The only thing you can't pass is an object:
 
 ```svelte:App.svelte
 <script lang="ts">
-	let count: number = 0
+	let banana = '🍌'
+	let color = 'orangered'
 </script>
 
+<!-- 👍️ attribute -->
+<h1 style="color: {color}">Here's a {banana}! 🦍</h1>
+
+<!-- 👍️ directive -->
+<h1 style:color|important>Here's a {banana}! 🦍</h1>
+
+<!-- ⛔️ object -->
+<h1 style={{ color }}>Here's a {banana}! 🦍</h1>
+```
+
+You can even use the shorthand for CSS custom properties:
+
+```svelte:App.svelte
+<script lang="ts">
+	let banana = '🍌'
+	let color = 'orangered'
+</script>
+
+<!-- 👍️ custom CSS property -->
+<h1 style="--color: {color}">Here's a {banana}! 🦍</h1>
+
+<!-- 👍️ shorthand -->
+<h1 style:--color={color}>Here's a {banana}! 🦍</h1>
+
+<style>
+	h1 {
+		/* custom CSS property with a default value */
+		color: var(--color, #fff);
+	}
+</style>
+```
+
+### Scoped Styles
+
+Fortunately, you're not stuck using the `style` attribute. Most of the time, you're going to use the `style` block to define styles in your component. Those styles are scoped to the component by default:
+
+```svelte:App.svelte
+<script lang="ts">
+	let banana = '🍌'
+</script>
+
+<h1>Here's a {banana}! 🦍</h1>
+
+<!-- these styles only apply to this component -->
+<style>
+	h1 {
+		color: orangered;
+	}
+</style>
+```
+
+Scoped styles are unique to that component and don't affect styles in other components. If you're using the Svelte playground, you can open the CSS output tab to view the generated CSS:
+
+```css:output
+/* uniquely generated class name */
+h1.svelte-ep2x9j {
+	color: orangered;
+}
+```
+
+If you want to define global styles for your app, you can import a CSS stylesheet at the root of your app:
+
+```ts:main.ts {4}
+// inside a Vite project
+import { mount } from 'svelte'
+import App from './App.svelte'
+import './app.css'
+
+const app = mount(App, {
+  target: document.getElementById('app')!
+})
+
+export default app
+```
+
+You can also define global styles in components. This is useful if you have content from a content management system (CMS) that you have no control over.
+
+Svelte has to "see" the styles in the component, so it doesn't know they exist and warns you about removing unusued styles:
+
+```svelte:App.svelte {14-15,17-18}
+<script lang="ts">
+	let content = `
+		<h1>Big Banana Exposed</h1>
+		<p>The gorillas inside the banana cartel speak out</p>
+	`
+</script>
+
+<div class="content">
+	{@html content}
+</div>
+
+<style>
+	.content {
+		/* ⚠️ Unused CSS selector "h1" */
+		h1 { font-size: 48px; }
+
+		/* ⚠️ Unused CSS selector "p" */
+		p { font-size: 20px; }
+	}
+</style>
+```
+
+In that case, you can make the styles global by using the `:global(selector)` modifier:
+
+```svelte:App.svelte {4,6}
+<!-- ... -->
+<style>
+	.content {
+		:global(h1) { font-size: 48px; }
+
+		:global(p) { font-size: 20px; }
+	}
+</style>
+```
+
+Having to use `:global` on every selector is tedious! Thankfully, you can nest global styles inside a `:global { ... }` block:
+
+```svelte:App.svelte {3}
+<!-- ... -->
+<style>
+	:global {
+		.prose {
+			h1 { font-size: 48px; }
+
+			p { font-size: 20px; }
+		}
+	}
+</style>
+```
+
+You can also have "global scoped styles" where the styles inside the `:global` block are scoped to the class:
+
+```svelte:App.svelte {3}
+<!-- ... -->
+<style>
+	.prose :global {
+		h1 { font-size: 48px; }
+
+		p { font-size: 20px; }
+	}
+</style>
+```
+
+Here's the compiled CSS output:
+
+```css:output
+.prose.svelte-ju1yn8 {
+	h1 {
+		font-size: 48px;
+	}
+
+	p {
+		font-size: 20px;
+	}
+}
+```
+
+You can use different [preprocessors](https://svelte.dev/docs/kit/integrations#vitePreprocess) like [PostCSS](https://postcss.org/) or [SCSS](https://sass-lang.com/) by simply adding the `lang` attribute to the `<style>` tag with the preprocessor you want to use:
+
+```svelte:example
+<style lang="postcss">
+	<!-- ... -->
+</style>
+
 <style lang="scss">
-	.prose {
-		p {
-			color: red;
+	<!-- ... -->
+</style>
+```
+
+### Dynamic Classes
+
+You can use an expression to apply a dynamic class, but it's tedious and easy to make mistakes:
+
+```svelte:App.svelte
+<script lang="ts">
+	let open = $state(false)
+</script>
+
+<div class="arrow {open ? 'open' : ''}">👈️</div>
+<button onclick={() => open = !open}>Toggle</button>
+
+<style>
+	.arrow {
+		transition: all 2s ease;
+
+		&.open {
+			rotate: -90deg;
+		}
+	}
+</style>
+```
+
+Thankfully, Svelte can helps us out here. You can use the `class:` directive to conditionally apply a class:
+
+```svelte:App.svelte
+<div class="arrow" class:open>👈️</div>
+```
+
+You can also pass an object, array, or both to the `class` attribute and Svelte is going to use [clsx](https://github.com/lukeed/clsx) under the hood to merge the classes:
+
+```svelte:App.svelte
+<!-- 👍️ passing an object -->
+<div class={{ arrow: true, open }}>👈️</div>
+
+<!-- 👍️ passing an array -->
+<div class={['arrow', open && 'open']}>👈️</div>
+
+<!-- 👍️ passing an array and object -->
+<div class={['arrow', { open }]}>👈️</div>
+```
+
+If you're using Tailwind, this is very useful when you need to apply a bunch of classes:
+
+```svelte:App.svelte
+<div class={['transition-all', { '-rotate-90': open }]}>👈️</div>
+```
+
+You should also consider using [data attributes](https://developer.mozilla.org/en-US/docs/Web/HTML/How_to/Use_data_attributes) to make the state more explicit instead of using a bunch of classes:
+
+```svelte:App.svelte
+<script lang="ts">
+	let status = $state('closed')
+</script>
+
+<div class="arrow" data-status={status}>👈️</div>
+<button onclick={() => status = status === 'closed' ? 'open' : 'closed'}>
+	Toggle
+</button>
+
+<style>
+	.arrow {
+		transition: all 2s ease;
+
+		&[data-status="open"] {
+			rotate: -90deg;
+		}
+
+		&[data-status="closed"] {
+			rotate: 0deg;
 		}
 	}
 </style>

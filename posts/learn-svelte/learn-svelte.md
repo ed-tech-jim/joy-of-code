@@ -8,6 +8,7 @@ category: svelte
 
 <script lang="ts">
 	import Card from '$lib/components/card.svelte'
+	import YouTube from '$lib/components/youtube.svelte'
 </script>
 
 ## Table of Contents
@@ -18,9 +19,51 @@ If we look at the definition from the [Svelte](https://svelte.dev/) website, it 
 
 > Svelte is a UI framework that uses a compiler to let you write breathtakingly concise components that do minimal work in the browser, using languages you already know — HTML, CSS and JavaScript.
 
-Svelte is not just a UI framework, it's a compiled language. This means having the best developer experience as it's not constrained by the limitations of JavaScript. You also ship less code and features like animations are built-in because only what you use gets bundled.
+Because Svelte is a compiled language, it can wield the same syntax of a language that's not great at making user interfaces like JavaScript and change the semantics for a better developer experience:
 
-If you're looking for an application framework with more opinions, routing, and server-side rendering among other things, Svelte has a meta-framework called [SvelteKit](https://svelte.dev/docs/kit/introduction) that's comparable to [Next.js](https://nextjs.org/) for React.
+```svelte:App.svelte
+<script lang="ts">
+	// reactive state
+	let count = $state(0)
+
+	// reassignment updates the UI
+	setInterval(() => count += 1, 1000)
+</script>
+
+<p>{count}</p>
+```
+
+You might think how Svelte does some crazy compiler stuff under the hood to make this work, but the output is human readable JavaScript:
+
+```ts:output
+function App($$anchor) {
+	// create signal
+	let count = state(0)
+
+	// update signal
+	setInterval(() => set(count, get(count) + 1), 1000)
+
+	// create element
+	var p = from_html(`<p> </p>`)
+	var text = child(p, true)
+
+	// update DOM when `count` changes
+	template_effect(() => set_text(text, get(count)))
+
+	// add to DOM
+	append($$anchor, p)
+}
+```
+
+In fact, Svelte's reactivity is just based on [signals](https://www.youtube.com/watch?v=1TSLEzNzGQM)! There's nothing magical about it. You could write a basic version of Svelte by hand without using a compiler.
+
+<!-- <YouTube id="1TSLEzNzGQM" title="Signals" /> -->
+
+Just by reading the output code, you can start to understand how Svelte works. There's no virtual DOM, or rerendering the component when state updates like in React — Svelte only updates the part of the DOM that changed.
+
+This is what "does minimal work in the browser" means!
+
+Svelte also has a more opinionated application framework called [SvelteKit](https://svelte.dev/docs/kit/introduction) (equivalent to [Next.js](https://nextjs.org/) for React) if you need routing, server-side rendering, adapters to deploy to different platforms and so on.
 
 ## Try Svelte
 
@@ -36,7 +79,7 @@ I also recommend using the [Svelte for VS Code extension](https://marketplace.vi
 
 If you're unfamiliar with TypeScript, code after `:` usually represents a type. You can omit the types and your code will work:
 
-```ts:example.ts
+```ts:example
 // TypeScript 👍️
 let items: string[] = [...]
 
@@ -46,7 +89,7 @@ let items = [...]
 
 Some developers prefer writing JavaScript with [JSDoc](https://jsdoc.app/) comments because it gives you the same benefits of TypeScript at the cost of a more verbose syntax:
 
-```ts:example.ts
+```ts:example
 /**
  * This is a list of items.
  * @type {string[]}
@@ -55,50 +98,6 @@ let items = [...]
 ```
 
 That is completely up to you!
-
-## Do You Even Need Frameworks?
-
-Maybe you never used a JavaScript framework before, or you could use a reminder to understand what problems it solves.
-
-Here's a simple counter example using regular HTML and JavaScript:
-
-```html:index.html
-<script type="module">
-	let count = 0
-	let text = document.querySelector('p')
-
-	function increment() {
-		count++
-		text.innerText = `Clicked ${count} ${count === 1 ? 'time' : 'times'}`
-	}
-</script>
-
-<p>Clicked 0 times</p>
-<button onclick="increment()">Click</button>
-```
-
-Having to keep track of state and [Document Object Model (DOM)](https://developer.mozilla.org/en-US/docs/Web/API/Document_Object_Model) updates is tedious even in the glorious age of AI.
-
-**You can think of Svelte as HTML with superpowers.**
-
-You write code in a **declarative** way like HTML, but you don't have to think about querying elements and keeping the state of your application in sync with the user interface.
-
-Here's the same example in Svelte:
-
-```svelte:App.svelte
-<script lang="ts">
-	let count = $state(0)
-
-	function increment() {
-		count++
-	}
-</script>
-
-<p>Clicked {count} {count === 1 ? 'time' : 'times'}</p>
-<button onclick={increment}>Click</button>
-```
-
-Don't worry if you don't understand the code yet! In the next section, we'll start from the fundamentals to more advanced concepts.
 
 ## Single File Components
 
@@ -123,11 +122,11 @@ Here's an example of a Svelte component:
 </style>
 ```
 
-A Svelte component can only have one top-level `<script>` and `<style>` block and is unique for every component instance. **The order of the blocks doesn't matter**.
+A Svelte component can only have one top-level `<script>` and `<style>` block and is unique for every component instance. A code formatter like Prettier might arrange the blocks for you, but **the order of the blocks doesn't matter**.
 
 There's also a special `<script module>` block used for sharing code across component instances we'll learn about later.
 
-## The Brains Of Your Component
+## The Component Logic
 
 Your component logic goes inside the `<script>` tag. Since Svelte 5, TypeScript is [natively supported](https://svelte.dev/docs/kit/integrations):
 
@@ -141,9 +140,9 @@ Your component logic goes inside the `<script>` tag. Since Svelte 5, TypeScript 
 
 Later we're going to learn how you can even define values inside your markup which can be helpful in some cases.
 
-## The Poetry In The Markup
+## The Markup Poetry
 
-In Svelte, anything that's outside the `<script>` and `<style>` block is considered markup:
+In Svelte, anything that's outside the `<script>` and `<style>` blocks is considered markup:
 
 ```svelte:App.svelte
 <!-- markup -->
@@ -162,13 +161,13 @@ You can use JavaScript expressions in the template using curly braces and Svelte
 
 Later we're going to learn about logic blocks like `if` and `each` to conditionally render content.
 
-Tags with lowercase names are treated like regular HTML elements by Svelte and accept regular attributes:
+Tags with lowercase names are treated like regular HTML elements by Svelte and accept normal attributes:
 
 ```svelte:App.svelte
 <img src="image.gif" alt="Man dancing" />
 ```
 
-You can also pass values to attributes using curly braces:
+You can pass values to attributes using curly braces:
 
 ```svelte:App.svelte
 <script lang="ts">
@@ -182,10 +181,14 @@ You can also pass values to attributes using curly braces:
 If the attribute name and value are the same, you can use a shorthand attribute:
 
 ```svelte:App.svelte
+<!-- 👍️ longhand -->
+<img src={src} alt={alt} />
+
+<!-- 👍️ shorthand -->
 <img {src} {alt} />
 ```
 
-Attributes can also have expressions inside the curly braces:
+Attributes can have expressions inside the curly braces:
 
 ```svelte:App.svelte
 <script lang="ts">
@@ -215,7 +218,7 @@ If you want to conditionally render attributes, don't use `&&` for short-circuit
 <img src={src} alt={alt} loading={lazy ? 'lazy' : undefined} />
 ```
 
-Attributes can also be spread on elements:
+You can spread attributes on elements:
 
 ```svelte:App.svelte
 <script lang="ts">
@@ -228,7 +231,7 @@ Attributes can also be spread on elements:
 <img {...obj} />
 ```
 
-## The Styles Of Your Component
+## The Component Styles
 
 There are many ways you can style a Svelte component. 💅 I've heard people love inline styles with [Tailwind CSS](https://tailwindcss.com/), so you could just use the `style` tag...I'm joking! 😄
 

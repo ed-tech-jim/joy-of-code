@@ -1,7 +1,7 @@
 ---
-title: Svelte 5 For Beginners
+title: The Complete Svelte 5 Guide
 description: The ultimate guide for the most beloved JavaScript framework.
-slug: svelte-5-for-beginners
+slug: learn-svelte
 published: '2025-7-14'
 category: svelte
 ---
@@ -58,16 +58,18 @@ That is completely up to you!
 
 ## Do You Even Need Frameworks?
 
-Let's start with a simple counter example using regular HTML and JavaScript:
+Maybe you never used a JavaScript framework before, or you could use a reminder to understand what problems it solves.
 
-```svelte:app.html
+Here's a simple counter example using regular HTML and JavaScript:
+
+```html:index.html
 <script type="module">
-	let banana = 0
+	let count = 0
 	let text = document.querySelector('p')
 
 	function increment() {
-		banana++
-		text.innerText = `Clicked ${banana} ${banana === 1 ? 'time' : 'times'}`
+		count++
+		text.innerText = `Clicked ${count} ${count === 1 ? 'time' : 'times'}`
 	}
 </script>
 
@@ -81,22 +83,22 @@ Having to keep track of state and [Document Object Model (DOM)](https://develope
 
 You write code in a **declarative** way like HTML, but you don't have to think about querying elements and keeping the state of your application in sync with the user interface.
 
-Let's look at the same example in Svelte:
+Here's the same example in Svelte:
 
 ```svelte:App.svelte
 <script lang="ts">
-	let banana = $state(0)
+	let count = $state(0)
 
 	function increment() {
-		banana++
+		count++
 	}
 </script>
 
-<p>Clicked {banana} {banana === 1 ? 'time' : 'times'}</p>
-<button onclick={increment}>🍌</button>
+<p>Clicked {count} {count === 1 ? 'time' : 'times'}</p>
+<button onclick={increment}>Click</button>
 ```
 
-Don't worry if you don't understand the code yet! In the next section, we'll go over it in more detail.
+Don't worry if you don't understand the code yet! In the next section, we'll start from the fundamentals to more advanced concepts.
 
 ## Single File Components
 
@@ -107,11 +109,11 @@ Here's an example of a Svelte component:
 ```svelte:App.svelte
 <!-- logic -->
 <script lang="ts">
-	let banana = '🍌'
+	let title = 'Svelte'
 </script>
 
 <!-- markup -->
-<h1>Here's a {banana}! 🦍</h1>
+<h1>{title}</h1>
 
 <!-- styles -->
 <style>
@@ -121,7 +123,7 @@ Here's an example of a Svelte component:
 </style>
 ```
 
-A Svelte component can only have one `<script>` and `<style>` block and is unique for every component instance. **The order of the blocks doesn't matter**.
+A Svelte component can only have one top-level `<script>` and `<style>` block and is unique for every component instance. **The order of the blocks doesn't matter**.
 
 There's also a special `<script module>` block used for sharing code across component instances we'll learn about later.
 
@@ -131,10 +133,10 @@ Your component logic goes inside the `<script>` tag. Since Svelte 5, TypeScript 
 
 ```svelte:App.svelte
 <script lang="ts">
-	let banana = '🍌'
+	let title = 'Svelte'
 </script>
 
-<h1>Here's a {banana as string}! 🦍</h1>
+<h1>{title as string}</h1>
 ```
 
 Later we're going to learn how you can even define values inside your markup which can be helpful in some cases.
@@ -145,7 +147,7 @@ In Svelte, anything that's outside the `<script>` and `<style>` block is conside
 
 ```svelte:App.svelte
 <!-- markup -->
-<h1>Here's a {banana}! 🦍</h1>
+<h1>Svelte</h1>
 ```
 
 You can use JavaScript expressions in the template using curly braces and Svelte is going to evalute it:
@@ -155,12 +157,18 @@ You can use JavaScript expressions in the template using curly braces and Svelte
 	let banana = 1
 </script>
 
-{banana === 1 ? 'banana' : 'bananas'}
+<p>There's {banana} {banana === 1 ? 'banana' : 'bananas'} left</p>
 ```
 
 Later we're going to learn about logic blocks like `if` and `each` to conditionally render content.
 
-Tags with lowercase names are treated like regular HTML elements by Svelte and accept attributes:
+Tags with lowercase names are treated like regular HTML elements by Svelte and accept regular attributes:
+
+```svelte:App.svelte
+<img src="image.gif" alt="Man dancing" />
+```
+
+You can also pass values to attributes using curly braces:
 
 ```svelte:App.svelte
 <script lang="ts">
@@ -171,7 +179,7 @@ Tags with lowercase names are treated like regular HTML elements by Svelte and a
 <img src={src} alt={alt} />
 ```
 
-You can use a shorthand attribute if the attribute name and value are the same:
+If the attribute name and value are the same, you can use a shorthand attribute:
 
 ```svelte:App.svelte
 <img {src} {alt} />
@@ -207,7 +215,7 @@ If you want to conditionally render attributes, don't use `&&` for short-circuit
 <img src={src} alt={alt} loading={lazy ? 'lazy' : undefined} />
 ```
 
-Attributes can be also spread on elements:
+Attributes can also be spread on elements:
 
 ```svelte:App.svelte
 <script lang="ts">
@@ -222,41 +230,37 @@ Attributes can be also spread on elements:
 
 ## The Styles Of Your Component
 
-There are many ways you can style a Svelte component. I've heard people love inline styles with [Tailwind CSS](https://tailwindcss.com/), so you could just use the `style` tag...I'm joking! 😄
-
-### The Style Tag
+There are many ways you can style a Svelte component. 💅 I've heard people love inline styles with [Tailwind CSS](https://tailwindcss.com/), so you could just use the `style` tag...I'm joking! 😄
 
 That being said, the `style` tag can be useful. You can use the `style` attribute like in regular HTML, but Svelte also has a shorthand `style:` directive you can use. The only thing you can't pass is an object:
 
 ```svelte:App.svelte
 <script lang="ts">
-	let banana = '🍌'
 	let color = 'orangered'
 </script>
 
 <!-- 👍️ attribute -->
-<h1 style="color: {color}">Here's a {banana}! 🦍</h1>
+<h1 style="color: {color}">Banana</h1>
 
 <!-- 👍️ directive -->
-<h1 style:color|important>Here's a {banana}! 🦍</h1>
+<h1 style:color>Banana</h1>
 
 <!-- ⛔️ object -->
-<h1 style={{ color }}>Here's a {banana}! 🦍</h1>
+<h1 style={{ color }}>Banana</h1>
 ```
 
-You can even use the shorthand for CSS custom properties:
+You can even add `important` like `style:color|important` to override styles. The `style:` directive is also great for CSS custom properties:
 
 ```svelte:App.svelte
 <script lang="ts">
-	let banana = '🍌'
 	let color = 'orangered'
 </script>
 
 <!-- 👍️ custom CSS property -->
-<h1 style="--color: {color}">Here's a {banana}! 🦍</h1>
+<h1 style="--color: {color}">Svelte</h1>
 
 <!-- 👍️ shorthand -->
-<h1 style:--color={color}>Here's a {banana}! 🦍</h1>
+<h1 style:--color={color}>Svelte</h1>
 
 <style>
 	h1 {
@@ -271,11 +275,7 @@ You can even use the shorthand for CSS custom properties:
 Fortunately, you're not stuck using the `style` attribute. Most of the time, you're going to use the `style` block to define styles in your component. Those styles are scoped to the component by default:
 
 ```svelte:App.svelte
-<script lang="ts">
-	let banana = '🍌'
-</script>
-
-<h1>Here's a {banana}! 🦍</h1>
+<h1>Svelte</h1>
 
 <!-- these styles only apply to this component -->
 <style>
@@ -381,13 +381,9 @@ Here's the compiled CSS output:
 
 ```css:output
 .prose.svelte-ju1yn8 {
-	h1 {
-		font-size: 48px;
-	}
+	h1 { font-size: 48px; }
 
-	p {
-		font-size: 20px;
-	}
+	p {	font-size: 20px; }
 }
 ```
 
@@ -403,21 +399,22 @@ You can use different [preprocessors](https://svelte.dev/docs/kit/integrations#v
 </style>
 ```
 
+These days you probably don't need SCSS anymore, since a lot of features such as nesting and CSS variables are supported by CSS.
+
 ### Dynamic Classes
 
 You can use an expression to apply a dynamic class, but it's tedious and easy to make mistakes:
 
-```svelte:App.svelte
+```svelte:App.svelte {2,5,11-13}
 <script lang="ts">
-	let open = $state(false)
+	let open = false
 </script>
 
-<div class="arrow {open ? 'open' : ''}">👈️</div>
-<button onclick={() => open = !open}>Toggle</button>
+<div class="trigger {open ? 'open' : ''}">👈️</div>
 
 <style>
-	.arrow {
-		transition: all 2s ease;
+	.trigger {
+		transition: all 0.2s ease;
 
 		&.open {
 			rotate: -90deg;
@@ -436,13 +433,13 @@ You can also pass an object, array, or both to the `class` attribute and Svelte 
 
 ```svelte:App.svelte
 <!-- 👍️ passing an object -->
-<div class={{ arrow: true, open }}>👈️</div>
+<div class={{ trigger: true, open }}>👈️</div>
 
 <!-- 👍️ passing an array -->
-<div class={['arrow', open && 'open']}>👈️</div>
+<div class={['trigger', open && 'open']}>👈️</div>
 
 <!-- 👍️ passing an array and object -->
-<div class={['arrow', { open }]}>👈️</div>
+<div class={['trigger', { open }]}>👈️</div>
 ```
 
 If you're using Tailwind, this is very useful when you need to apply a bunch of classes:
@@ -453,18 +450,15 @@ If you're using Tailwind, this is very useful when you need to apply a bunch of 
 
 You should also consider using [data attributes](https://developer.mozilla.org/en-US/docs/Web/HTML/How_to/Use_data_attributes) to make the state more explicit instead of using a bunch of classes:
 
-```svelte:App.svelte
+```svelte:App.svelte {2,5,11-13,15-17}
 <script lang="ts">
-	let status = $state('closed')
+	let status = 'closed'
 </script>
 
-<div class="arrow" data-status={status}>👈️</div>
-<button onclick={() => status = status === 'closed' ? 'open' : 'closed'}>
-	Toggle
-</button>
+<div class="trigger" data-status={status}>👈️</div>
 
 <style>
-	.arrow {
+	.trigger {
 		transition: all 2s ease;
 
 		&[data-status="open"] {

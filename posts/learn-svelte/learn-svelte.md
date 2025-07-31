@@ -475,44 +475,80 @@ You should also consider using [data attributes](https://developer.mozilla.org/e
 </style>
 ```
 
-## State Management And Reactivity Using Runes
+## Svelte Reactivity
 
-In the last example, we defined a reactive variable `count` using the `$state` syntax:
+What is state?
+
+In the context of JavaScript frameworks, **application state** refers to a value that can change over time and cause the framework to update the UI.
+
+Let's look at a counter example:
 
 ```svelte:App.svelte
-<script>
-	let count = $state(0)
+<!-- only required for this example because of legacy mode -->
+<svelte:options runes={true} />
 
-	function increment() {
-		count++
-	}
+<script lang="ts">
+	let count = 0
 </script>
 
-<p>Clicked {count} {count === 1 ? 'time' : 'times'}</p>
-<button onclick={increment}>Click</button>
+<button onclick={() => count += 1}>
+	{count}
+</button>
 ```
 
-The `$state` syntax is called a **rune** and is part of the Svelte language. Under the hood Svelte turns the `$state` rune into a signal. The three main important runes we're going to learn about are the `$state`, `$derived`, and `$effect` rune.
+The Svelte compiler knows that you're trying to update the `count` value and warns you because it's not reactive:
+
+> `count` is updated, but is not declared with `$state(...)`. Changing its value will not correctly trigger updates.
+
+This brings us to our first Svelte rune — the `$state` rune.
+
+### Reactive State
 
 The `$state` rune marks a variable as reactive. Svelte's reactivity is based on **assignments**. To update the UI, you just assign a new value to a reactive variable:
 
-```svelte:App.svelte {5-10}
-<script>
+```svelte:App.svelte
+<script lang="ts">
 	// reactive value
 	let count = $state(0)
-
-	function increment() {
-		// reactive assignment
-		count += 1
-	}
 </script>
 
-<!-- update every time count changes -->
-<p>Clicked {count} {count === 1 ? 'time' : 'times'}</p>
-<button onclick={increment}>Click</button>
+<!-- reactive assignment -->
+<button onclick={() => count += 1}>
+	{count}
+</button>
 ```
 
-In Svelte, components don't rerun when a value changes like in React. Instead, Svelte surgically updates the DOM in place when a value updates.
+<Card type="info">
+	I only used <code>count += 1</code> to emphasize assignment, but you can use <code>count++</code> to increment the value.
+</Card>
+
+The `$state(...)` syntax is called a **rune** and is part of the language. It looks like a function, but it's just for Svelte to know it should be a signal. The three main runes we're going to learn about are the `$state`, `$derived`, and `$effect` rune.
+
+You can open the developer tools and see that Svelte only updates the part of the DOM that changed.
+
+### Deeply Reactive State
+
+```svelte:App.svelte
+<script lang="ts">
+	let editor = $state({
+		theme: 'light',
+		content: '<h1>Svelte</h1>'
+	})
+</script>
+
+<textarea bind:value={editor.content}></textarea>
+
+{@html editor.content}
+
+<style>
+	textarea {
+		width: 100%;
+		height: 200px;
+	}
+</style>
+```
+
+### Derived State
 
 If you want a value to automatically update when other values it depends on update, you should use the `$derived` rune to create a computed value:
 
@@ -552,6 +588,8 @@ The `$derived` rune only accepts an expression by default, but you can use the `
 ```
 
 Derived values are lazy evaluted. The derived value only updates when it changes and not when their dependencies change.
+
+### Effects
 
 The last rune you should know about is the `$effect` rune. Effects are functions that run when the component is added (mounted) and when their dependencies change. You can also return a function from an effect which reruns when the effect dependencies change, or when the component removed (unmounted).
 

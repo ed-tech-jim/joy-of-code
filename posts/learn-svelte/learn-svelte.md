@@ -528,7 +528,7 @@ You can open the developer tools and see that Svelte only updates the part of th
 
 ### Deeply Reactive State
 
-If you pass an array, or object to `$state` it becomes a deeply reactive [Proxy](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Proxy). This lets Svelte perform granular updates when you read or write properties.
+If you pass an array, or object to `$state` it becomes a deeply reactive [Proxy](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Proxy). This lets Svelte perform granular updates when you read or write properties and avoid mutating the state directly.
 
 For example, changing `editor.content` is going to update the UI in every place where `editor.content` is used:
 
@@ -540,7 +540,7 @@ For example, changing `editor.content` is going to update the UI in every place 
 	})
 </script>
 
-<!-- we can also bind values -->
+<!-- more about this later 🤫 -->
 <textarea bind:value={editor.content}></textarea>
 
 {@html editor.content}
@@ -553,22 +553,15 @@ For example, changing `editor.content` is going to update the UI in every place 
 </style>
 ```
 
-This power comes at a cost! Because it's not obvious that deeply reactive state is a Proxy object, you can run into problems when you pass it to some API that doesn't expect it. In that case, you can use `$state.snapshot` to pass a regular value:
+This is important to know because it's not obvious that deeply reactive state is proxied. You can change state on accident when you pass it around, or get an error if some API doesn't expect it. In that case, you can use `$state.snapshot` to pass a regular value:
 
-```ts:api.ts
-function takeEditorSnapshot(obj) {
-	// ⛔️ error
-	Object.defineProperty(obj, 'metadata', { ... })
-
-	// 👍️ works
-	Object.defineProperty($state.snapshot(obj), 'metadata', {
-		value: { modified: new Date() },
-		enumerable: true
-	})
-	// ...
+```ts:editor.ts
+function saveEditorState(editor) {
+	// 💣️ oops!
+	const editorState = structuredClone(editor)
+	// 👍️ using `$state.snapshot`
+	const editorState = structuredClone($state.snapshot(editor))
 }
-
-takeEditorSnapshot(editor)
 ```
 
 Keep in mind that destructuring loses reactivity because it's just JavaScript, so the values are evaluated when you destructure them:
@@ -594,24 +587,55 @@ If you want to do this, you can use a derived value!
 If you want to derive a value when other values it depends on change, you can use the `$derived` rune:
 
 ```svelte:App.svelte {4,5}
-<script>
+<script lang="ts">
 	let count = $state(0)
 	let factor = $state(2)
 	let double = $derived(count * factor)
-	let quadruple = $derived(double * factor)
 </script>
 
 <button onclick={() => count++}>Count: {count}</button>
 <button onclick={() => factor++}>Factor: {factor}</button>
 
 <p>{count} * {factor} = {double}</p>
-<p>{double} * {factor} = {quadruple}</p>
 ```
+
+Derived values **only run when they're read** and are **lazy evaluted** which means they only update when they change and not when their dependencies change to avoid unnecessary work. For example, even if `large` depends on `count`, it only updates when `large` updates instead of `count`:
+
+```svelte:App.svelte {3,5-6,10}
+<script lang="ts">
+	let count = $state(0)
+	let large = $derived(count > 4)
+
+	// only logs when `large` changes
+	$inspect(large)
+</script>
+
+<button onclick={() => count++}>
+	{large}
+</button>
+```
+
+Deriveds should be free of side-effects and Svelte won't let you update state inside of them to save you from yourself:
+
+```svelte:App.svelte
+<script lang="ts">
+	let count = $state(0)
+	// ⛔️ can't do this
+	let doubled = $derived(count++)
+</script>
+
+<p>{doubled}</p>
+```
+
+TODO: using functions
+TODO: mention branching
+TODO: synchronously read reactivity
+TODO: values only tracked when read
 
 The `$derived` rune only accepts an expression by default, but you can use the `$derived.by` rune if you want to pass a function for a more complex derivation:
 
 ```svelte:App.svelte {6-12}
-<script>
+<script lang="ts">
 	let cart = $state([
 		{ item: 'apple', total: 10 },
 		{ item: 'banana', total: 10 }
@@ -627,8 +651,6 @@ The `$derived` rune only accepts an expression by default, but you can use the `
 
 <p>Total: {total}€</p>
 ```
-
-Derived values are lazy evaluted. The derived value only updates when it changes and not when their dependencies change.
 
 You can also use derived values to keep reactivity when destructuring state:
 

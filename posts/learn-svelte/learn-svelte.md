@@ -528,6 +528,10 @@ You can open the developer tools and see that Svelte only updates the part of th
 
 ### Deeply Reactive State
 
+If you pass an array, or object to `$state` it becomes a deeply reactive [Proxy](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Proxy). This lets Svelte perform granular updates when you read or write properties.
+
+For example, changing `editor.content` is going to update the UI in every place where `editor.content` is used:
+
 ```svelte:App.svelte
 <script lang="ts">
 	let editor = $state({
@@ -536,6 +540,7 @@ You can open the developer tools and see that Svelte only updates the part of th
 	})
 </script>
 
+<!-- we can also bind values -->
 <textarea bind:value={editor.content}></textarea>
 
 {@html editor.content}
@@ -548,23 +553,59 @@ You can open the developer tools and see that Svelte only updates the part of th
 </style>
 ```
 
-### Derived State
+This power comes at a cost! Because it's not obvious that deeply reactive state is a Proxy object, you can run into problems when you pass it to some API that doesn't expect it. In that case, you can use `$state.snapshot` to pass a regular value:
 
-If you want a value to automatically update when other values it depends on update, you should use the `$derived` rune to create a computed value:
+```ts:api.ts
+function takeEditorSnapshot(obj) {
+	// ⛔️ error
+	Object.defineProperty(obj, 'metadata', { ... })
 
-```svelte:App.svelte {3-11}
-<script>
-	let count = $state(0)
-	let double = $derived(count * 2)
+	// 👍️ works
+	Object.defineProperty($state.snapshot(obj), 'metadata', {
+		value: { modified: new Date() },
+		enumerable: true
+	})
+	// ...
+}
 
-	function increment() {
-		count += 1
-	}
+takeEditorSnapshot(editor)
+```
+
+Keep in mind that destructuring loses reactivity because it's just JavaScript, so the values are evaluated when you destructure them:
+
+```svelte:App.svelte {7-8}
+<script lang="ts">
+	let editor = $state({
+		theme: 'light',
+		content: '<h1>Svelte</h1>'
+	})
+
+	// ⛔️ not reactive
+	let { theme, content } = editor
 </script>
 
-<button onclick={increment}>
-	{doubled}
-</button>
+{@html content}
+```
+
+If you want to do this, you can use a derived value!
+
+### Derived State
+
+If you want to derive a value when other values it depends on change, you can use the `$derived` rune:
+
+```svelte:App.svelte {4,5}
+<script>
+	let count = $state(0)
+	let factor = $state(2)
+	let double = $derived(count * factor)
+	let quadruple = $derived(double * factor)
+</script>
+
+<button onclick={() => count++}>Count: {count}</button>
+<button onclick={() => factor++}>Factor: {factor}</button>
+
+<p>{count} * {factor} = {double}</p>
+<p>{double} * {factor} = {quadruple}</p>
 ```
 
 The `$derived` rune only accepts an expression by default, but you can use the `$derived.by` rune if you want to pass a function for a more complex derivation:
@@ -589,9 +630,30 @@ The `$derived` rune only accepts an expression by default, but you can use the `
 
 Derived values are lazy evaluted. The derived value only updates when it changes and not when their dependencies change.
 
+You can also use derived values to keep reactivity when destructuring state:
+
+```svelte:App.svelte {7-8,10-11}
+<script lang="ts">
+	let editor = $state({
+		theme: 'light',
+		content: '<h1>Svelte</h1>'
+	})
+
+	// ⛔️ not reactive
+	let { theme, content } = editor
+
+	// 👍️ reactive
+	let { theme, content } = $derived(editor)
+</script>
+
+{@html content}
+```
+
 ### Effects
 
-The last rune you should know about is the `$effect` rune. Effects are functions that run when the component is added (mounted) and when their dependencies change. You can also return a function from an effect which reruns when the effect dependencies change, or when the component removed (unmounted).
+The last main rune you should know about is the `$effect` rune.
+
+Effects are functions that run when the component is added to the DOM and when their dependencies change. You can also return a function from an effect which reruns when the effect dependencies change, or when the component is removed from the DOM.
 
 **Effects don't need a dependency array** because of how signals work — if a reactive value is read inside of an effect, it will be tracked and the effect will rerun when the tracked value changes:
 
@@ -617,24 +679,24 @@ The last rune you should know about is the `$effect` rune. Effects are functions
 	You can use the <a href="https://svelte.dev/docs/svelte/$inspect" target="_blank">$inspect</a> rune instead of effects to log when a reactive value updates.
 </Card>
 
-**You should never use effects for updating state** because Svelte queues effects and runs them after everything is updated.
+**You should never use effects to sync state** because Svelte queues effects and runs them after everything is updated.
 
-Here's an example how using effects to synchronize state can cause unexpected behavior:
+Using effects to sync state can cause unexpected behaviors like the value being out of sync:
 
-```svelte:App.svelte {3,5-7,12-13}
+```svelte:App.svelte {5-8,12-13}
 <script>
 	let count = $state(0)
 	let double = $state(0)
 
 	$effect(() => {
-		// `double` is updated after we log `double`
+		// effects are queued and run last
 		double = count * 2
 	})
 </script>
 
 <button onclick={() => {
-	count++
-	console.log(double) // ⚠️ out of sync
+	count++ // 1
+	console.log(double) // ⚠️ 0
 }}>
 	{double}
 </button>
@@ -649,8 +711,8 @@ Here's an example how using effects to synchronize state can cause unexpected be
 </script>
 
 <button onclick={() => {
-	count++
-	console.log(double) // 👍️ latest value
+	count++ // 1
+	console.log(double) // 👍️ 2
 }}>
 	{double}
 </button>
@@ -660,7 +722,7 @@ Here's an example how using effects to synchronize state can cause unexpected be
 	Derived values are effects under the hood, but they rerun immediately when their dependencies change.
 </Card>
 
-Effects should only be used for side-effects like fetching data from an API, working with the DOM directly, or to synchronize with an external system that doesn't understand Svelte's reactivity:
+Effects are mostly used to synchronize with external systems that don't understand Svelte's reactivity and should only be used for side-effects like fetching data from an API, or working with the DOM directly:
 
 ```svelte:App.svelte
 <script>
@@ -670,12 +732,10 @@ Effects should only be used for side-effects like fetching data from an API, wor
 		const savedPokemon = localStorage.getItem('pokemon')
 
 		if (!savedPokemon) {
-			// fetching data from an API
 			fetch('https://pokeapi.co/api/v2/pokemon')
 				.then((response) => response.json())
 				.then((data) => {
 					pokemon = data
-					// sync with an external system
 					localStorage.setItem('pokemon', JSON.stringify(data))
 				})
 		} else {
@@ -687,7 +747,9 @@ Effects should only be used for side-effects like fetching data from an API, wor
 <pre>{JSON.stringify(pokemon, null, 2)}</pre>
 ```
 
-### Universal Reactivity
+### Encapsulating State
+
+### Global State
 
 So far we've only used reactivity inside Svelte components. In the past, Svelte even had writable stores, because it used compile-time reactivity which didn't work outside of components.
 

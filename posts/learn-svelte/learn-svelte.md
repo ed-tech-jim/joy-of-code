@@ -126,7 +126,7 @@ A Svelte component can only have one top-level `<script>` and `<style>` block an
 
 There's also a special `<script module>` block used for sharing code across component instances we'll learn about later.
 
-## The Component Logic
+## Component Logic
 
 Your component logic goes inside the `<script>` tag. Since Svelte 5, TypeScript is [natively supported](https://svelte.dev/docs/kit/integrations):
 
@@ -140,7 +140,7 @@ Your component logic goes inside the `<script>` tag. Since Svelte 5, TypeScript 
 
 Later we're going to learn how you can even define values inside your markup which can be helpful in some cases.
 
-## The Markup Poetry
+## Markup Poetry
 
 In Svelte, anything that's outside the `<script>` and `<style>` blocks is considered markup:
 
@@ -231,7 +231,7 @@ You can spread attributes on elements:
 <img {...obj} />
 ```
 
-## The Component Styles
+## Component Styles
 
 There are many ways you can style a Svelte component. 💅 I've heard people love inline styles with [Tailwind CSS](https://tailwindcss.com/), so you could just use the `style` tag...I'm joking! 😄
 
@@ -479,7 +479,7 @@ You should also consider using [data attributes](https://developer.mozilla.org/e
 
 What is state?
 
-In the context of JavaScript frameworks, **application state** refers to a value that can change over time and cause the framework to update the UI.
+In the context of JavaScript frameworks, **application state** refers to values that are essential to your application working and cause the framework to update the UI when changed.
 
 Let's look at a counter example:
 
@@ -506,7 +506,7 @@ This brings us to our first Svelte rune — the `$state` rune.
 
 The `$state` rune marks a variable as reactive. Svelte's reactivity is based on **assignments**. To update the UI, you just assign a new value to a reactive variable:
 
-```svelte:App.svelte
+```svelte:App.svelte {3,7}
 <script lang="ts">
 	// reactive value
 	let count = $state(0)
@@ -518,21 +518,27 @@ The `$state` rune marks a variable as reactive. Svelte's reactivity is based on 
 </button>
 ```
 
+You can open the developer tools and see that Svelte only updated the part of the DOM that changed.
+
 <Card type="info">
-	I only used <code>count += 1</code> to emphasize assignment, but you can use <code>count++</code> to increment the value.
+	I used <code>count += 1</code> to emphasize assignment, but you can use <code>count++</code> to increment the value.
 </Card>
 
-The `$state(...)` syntax is called a **rune** and is part of the language. It looks like a function, but it's just for Svelte to know it should be a signal. The three main runes we're going to learn about are the `$state`, `$derived`, and `$effect` rune.
+The `$state(...)` syntax is called a **rune** and is part of the language. It looks like a function, but it's only a hint to Svelte what to do with it. This means as far as TypeScript is concerned, it's just a function:
 
-You can open the developer tools and see that Svelte only updates the part of the DOM that changed.
+```ts:example
+let value = $state<Type>(...)
+```
+
+The three main runes we're going to learn about are the `$state`, `$derived`, and `$effect` rune.
 
 ### Deeply Reactive State
 
-If you pass an array, or object to `$state` it becomes a deeply reactive [Proxy](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Proxy). This lets Svelte perform granular updates when you read or write properties and avoid mutating the state directly.
+If you pass an array, or object to `$state` it becomes a deeply reactive [Proxy](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Proxy). This lets Svelte perform granular updates when you read or write properties and avoids mutating the state directly.
 
 For example, changing `editor.content` is going to update the UI in every place where `editor.content` is used:
 
-```svelte:App.svelte
+```svelte:App.svelte {2-5,10,13}
 <script lang="ts">
 	let editor = $state({
 		theme: 'light',
@@ -540,8 +546,10 @@ For example, changing `editor.content` is going to update the UI in every place 
 	})
 </script>
 
-<!-- more about this later 🤫 -->
-<textarea bind:value={editor.content}></textarea>
+<textarea
+	value={editor.content}
+	oninput={e => editor.content = e.target.value}
+></textarea>
 
 {@html editor.content}
 
@@ -553,18 +561,57 @@ For example, changing `editor.content` is going to update the UI in every place 
 </style>
 ```
 
-This is important to know because it's not obvious that deeply reactive state is proxied. You can change state on accident when you pass it around, or get an error if some API doesn't expect it. In that case, you can use `$state.snapshot` to pass a regular value:
+You might not want deeply reactive state where pushing to an array or updating the object would cause an update. In that case, you can use `$state.raw` so state only updates when you reassign it:
+
+```svelte:App.svelte {2-6,12-13,15-19}
+<script lang="ts">
+	// this could be a complex object
+	let editor = $state.raw({
+		theme: 'light',
+		content: '<h1>Svelte</h1>'
+	})
+</script>
+
+<textarea
+	value={editor.content}
+	oninput={e => {
+		// ⛔️ can't be mutated
+		editor.content = e.target.value
+
+		// 👍️ reassignment
+		editor = {
+			...editor,
+			content: e.target.value
+		}
+	}}
+></textarea>
+
+{@html editor.content}
+
+<style>
+	textarea {
+		width: 100%;
+		height: 200px;
+	}
+</style>
+```
+
+You can use `$state.snapshot` to get the normal value if you want to avoid changing proxied state on accident when you pass it around, or to some API that doesn't expect it:
 
 ```ts:editor.ts
 function saveEditorState(editor) {
-	// 💣️ oops!
+	// 💣️ oops! it doesn't like a Proxy object...
 	const editorState = structuredClone(editor)
-	// 👍️ using `$state.snapshot`
+	// 👍️ normal object
 	const editorState = structuredClone($state.snapshot(editor))
 }
 ```
 
-Keep in mind that destructuring loses reactivity because it's just JavaScript, so the values are evaluated when you destructure them:
+<Card type="info">
+	Svelte uses <code>$state.snapshot</code> when you <code>console.log</code> deeply reactive values for convenience.
+</Card>
+
+You should also be aware that destructuring loses reactivity because it's just JavaScript, so the values are evaluated when you destructure them:
 
 ```svelte:App.svelte {7-8}
 <script lang="ts">
@@ -580,13 +627,13 @@ Keep in mind that destructuring loses reactivity because it's just JavaScript, s
 {@html content}
 ```
 
-If you want to do this, you can use a derived value!
+If you want to do this, you can use derived state!
 
 ### Derived State
 
-If you want to derive a value when other values it depends on change, you can use the `$derived` rune:
+You can derive state from other state using the `$derived` rune and it's going to reactively update:
 
-```svelte:App.svelte {4,5}
+```svelte:App.svelte {4}
 <script lang="ts">
 	let count = $state(0)
 	let factor = $state(2)
@@ -599,38 +646,62 @@ If you want to derive a value when other values it depends on change, you can us
 <p>{count} * {factor} = {double}</p>
 ```
 
-Derived values **only run when they're read** and are **lazy evaluted** which means they only update when they change and not when their dependencies change to avoid unnecessary work. For example, even if `large` depends on `count`, it only updates when `large` updates instead of `count`:
+Derived values **only run when they're read** and are **lazy evaluted** which means they only update when they change and not when their dependencies change to avoid unnecessary work. Even if `max` depends on `count`, it only updates when `max` updates instead of `count`:
 
-```svelte:App.svelte {3,5-6,10}
+```svelte:App.svelte {3,5-6,9}
 <script lang="ts">
 	let count = $state(0)
-	let large = $derived(count > 4)
+	let max = $derived(count >= 4)
 
-	// only logs when `large` changes
-	$inspect(large)
+	// only logs when `max` changes
+	$inspect(max)
 </script>
 
-<button onclick={() => count++}>
-	{large}
+<button onclick={() => count++} disabled={max}>
+	{count}
 </button>
 ```
 
-Deriveds should be free of side-effects and Svelte won't let you update state inside of them to save you from yourself:
+<Card type="info">
+	The <code>$inspect</code> rune only runs in development and it's great for seeing state updates and debugging.
+</Card>
 
-```svelte:App.svelte
+You can pass a function to a derived without losing reactivity since a signal only has to be read to become a dependency:
+
+```svelte:App.svelte {3,5-7,10}
 <script lang="ts">
 	let count = $state(0)
-	// ⛔️ can't do this
-	let doubled = $derived(count++)
+	let max = $derived(limit())
+
+	function limit() {
+		return count > 4
+	}
 </script>
 
-<p>{doubled}</p>
+<button onclick={() => count++} disabled={max}>
+	{count}
+</button>
 ```
 
-TODO: using functions
-TODO: mention branching
-TODO: synchronously read reactivity
-TODO: values only tracked when read
+This might sound like magic, but the only magic here is the system of signals and runtime reactivity! 🪄
+
+The reason you don't have to pass state to the function — unless you want to be explicit — is because signals only care where they're read, as highlighted in the compiled output:
+
+```ts:output {5,9}
+// a)
+let disabled = derived(limit)
+
+function limit() {
+	return get(count) > 4 // 📖
+}
+
+// b)
+let disabled = derived(() => limit(get(count))) // 📖
+
+function limit(count) {
+	return count > 4
+}
+```
 
 The `$derived` rune only accepts an expression by default, but you can use the `$derived.by` rune if you want to pass a function for a more complex derivation:
 
@@ -650,6 +721,18 @@ The `$derived` rune only accepts an expression by default, but you can use the `
 </script>
 
 <p>Total: {total}€</p>
+```
+
+Svelte recommends you keep deriveds free of side-effects, so you can't update state inside of deriveds to protect you from unintended side-effects:
+
+```svelte:App.svelte
+<script lang="ts">
+	let count = $state(0)
+	let double = $derived(() => {
+		// ⛔️ error
+		count++
+	})
+</script>
 ```
 
 You can also use derived values to keep reactivity when destructuring state:
@@ -673,6 +756,13 @@ You can also use derived values to keep reactivity when destructuring state:
 
 ### Effects
 
+Todo:
+
+- using functions
+- mention branching
+- synchronously read reactivity
+- values only tracked when read
+
 The last main rune you should know about is the `$effect` rune.
 
 Effects are functions that run when the component is added to the DOM and when their dependencies change. You can also return a function from an effect which reruns when the effect dependencies change, or when the component is removed from the DOM.
@@ -680,7 +770,7 @@ Effects are functions that run when the component is added to the DOM and when t
 **Effects don't need a dependency array** because of how signals work — if a reactive value is read inside of an effect, it will be tracked and the effect will rerun when the tracked value changes:
 
 ```svelte:App.svelte {5-10}
-<script>
+<script lang="ts">
 	let count = $state(0)
 	let double = $derived(count * 2)
 
@@ -706,7 +796,7 @@ Effects are functions that run when the component is added to the DOM and when t
 Using effects to sync state can cause unexpected behaviors like the value being out of sync:
 
 ```svelte:App.svelte {5-8,12-13}
-<script>
+<script lang="ts">
 	let count = $state(0)
 	let double = $state(0)
 
@@ -727,7 +817,7 @@ Using effects to sync state can cause unexpected behaviors like the value being 
 **Always derive your state** using the `$derived` rune when you can and reach for the `$effect` rune sparingly:
 
 ```svelte:App.svelte {3,7-8}
-<script>
+<script lang="ts">
 	let count = $state(0)
 	let double = $derived(count * 2)
 </script>
@@ -812,6 +902,67 @@ class Config {
 
 export const config = new Config()
 ```
+
+## Signals Reactivity Aside
+
+I believe understanding how things work give you a greater enjoyment by being more competent at what you do.
+
+I probably mentioned how Svelte uses signals for reactivity, but signals aren't unique to Svelte! You can find them in other frameworks like Angular, Solid, Vue, Qwik, and more. There's even a [proposal to add signals to JavaScript](https://github.com/tc39/proposal-signals) itself.
+
+So far we learned that assignments trigger updates in Svelte. There's nothing special about `=` though! In this example, it just creates a function call to update the value:
+
+```svelte:example {2-3}
+<script lang="ts">
+	let value = $state('🍎') // let value = state('🍎')
+	value = '🍌' // set(value, '🍌')
+</script>
+
+<!-- how does this get updated? -->
+{value}
+```
+
+A signal is just a container that holds subscribers. You need effects to react to signals. This means effects are functions that run when a signal changes.
+
+In Svelte, everything is an effect! Everything starts with a root effect and your component is a nested effect inside of it.
+
+The magic happens when you read a signal inside of an effect, which happens to be the template:
+
+```svelte:example
+<!-- template_effect(() => set_text(text, get(value))) -->
+{value}
+```
+
+The effect runs the function and sets it as the active effect in some variable:
+
+```ts:example
+let context = null
+
+function template_effect(fn) {
+	context = fn
+	// ...
+}
+```
+
+When `count` is read it adds the active effect as a subscriber:
+
+```ts:example
+let context = effect
+
+function get(count) {
+	count.subscribers.add(context)
+	// ...
+}
+```
+
+Later, when you update `count`, it notifies the subscribers. This happens every update and that's why it's called **runtime reactivity**, because it happens as your code runs!
+
+Svelte doesn't compile the reactivity, but hides the implementation details — you can use `count` as a normal value, instead of having to use functions like `get` and `set` everywhere.
+
+Deriveds are also effects! That's why you can pass a function with state to a derived and it just works because it's read inside the derived and becomes a dependency.
+
+That is also why we have to use a function `() => value`, or a getter `get() { return value }` to get the latest value when the effect reruns. Otherwise, you just get the same value.
+
+As the React people love to say, "it's just JavaScript!" 😄
 
 ## Template Logic
 
@@ -1128,7 +1279,7 @@ Another useful thing to know about are **function bindings** when you need to do
 } />
 ```
 
-## Components
+## Svelte Components
 
 > Frameworks are not tools for organizing your code, they are tools for organizing your mind. — [Rich Harris](https://www.youtube.com/watch?v=AdNJ3fydeao)
 
@@ -1484,7 +1635,7 @@ As a cherry on top, let's save the todos in local storage:
 
 There are more ways to do this, but I'm going to leave it here for now. Later we're going to learn how to talk between components without props, using the context API.
 
-## Component Composition In Svelte
+## Component Composition
 
 You can compose components by nesting them, using snippets which hold content that can be passed as props to components similar to slots, and communicate between components with the context API without props or events.
 
@@ -1838,7 +1989,7 @@ ctx.emoji.current
 ctx.emoji.current = '🍎'
 ```
 
-## Using Animations For Delightful User Interactions
+## Delightful User Interactions
 
 In this section, I'm going to show you how you can use Svelte's built-in transitions and animations to create delightful user interactions.
 
@@ -2312,7 +2463,7 @@ If you want to update the `Tween` or `Spring` value when a reactive value change
 </script>
 ```
 
-## Integrating Third Party Libraries With Svelte
+## Integrating Third Party Libraries
 
 If a specific Svelte package isn't available, you have the entire JavaScript ecosystem at your fingertips. In this section, we're going to learn methods at your disposal you can use to integrate third party JavaScript libraries with Svelte.
 
@@ -2560,7 +2711,7 @@ Instead of the animation component, we can create an attachment function which c
 
 A cool idea would be to have different attachments like `{@attach tween.from(...)}` or `{@attach tween.to(...)}`. The fun comes from picking the API shape you want that works in harmony with Svelte.
 
-## Integrating Event-Based Systems With Svelte
+## Integrating Event-Based Systems
 
 This is a more advanced topic, but I think it's useful to know whenever you're trying to make an external system reactive in Svelte.
 

@@ -756,77 +756,152 @@ You can also use derived values to keep reactivity when destructuring state:
 
 ### Effects
 
-Todo:
+TODO:
 
-- using functions
 - mention branching
-- synchronously read reactivity
-- values only tracked when read
+- $effect.pre
 
 The last main rune you should know about is the `$effect` rune.
 
-Effects are functions that run when the component is added to the DOM and when their dependencies change. You can also return a function from an effect which reruns when the effect dependencies change, or when the component is removed from the DOM.
+Effects are functions that run when the component is added to the DOM and when their dependencies change.
 
-**Effects don't need a dependency array** because of how signals work — if a reactive value is read inside of an effect, it will be tracked and the effect will rerun when the tracked value changes:
+State that is **read** inside of an effect will be tracked:
 
-```svelte:App.svelte {5-10}
+```svelte:App.svelte {2,5-6}
 <script lang="ts">
-	let count = $state(0)
-	let double = $derived(count * 2)
+	let a = $state(0)
 
 	$effect(() => {
-		// reruns if `count` or `double` changes
-		console.log({ count, double })
-		// also runs when the component is removed
-		return () => console.log('🧹 cleanup')
+		// 🕵️ tracked
+		console.log(a)
 	})
 </script>
 
-<button onclick={() => count++}>
-	{double}
-</button>
+<button onclick={() => a++}>Update A</button>
 ```
 
 <Card type="info">
-	You can use the <a href="https://svelte.dev/docs/svelte/$inspect" target="_blank">$inspect</a> rune instead of effects to log when a reactive value updates.
+	Use the <a href="https://svelte.dev/docs/svelte/$inspect" target="_blank">$inspect</a> rune instead of effects to log when a reactive value updates.
 </Card>
 
-**You should never use effects to sync state** because Svelte queues effects and runs them after everything is updated.
+Svelte provides an `untrack` function if you don't want to track the state:
 
-Using effects to sync state can cause unexpected behaviors like the value being out of sync:
+```svelte:App.svelte {2-3,7-8}
+<script lang="ts">
+	import { untrack } from 'svelte'
+
+	let a = $state(0)
+	let b = $state(0)
+
+	$effect(() => {
+		// ⛔️ only runs when `b` changes
+		console.log(untrack(() => a) + b)
+	})
+</script>
+
+<button onclick={() => a++}>Update A</button>
+<button onclick={() => b++}>Update B</button>
+```
+
+You can return a function from the effect callback, which reruns when the effect **dependencies change**, or when the component is **removed** from the DOM:
+
+```svelte:App.svelte {8-9}
+<script lang="ts">
+	let a = $state(0)
+	let delay = $state(1000)
+
+	$effect(() => {
+		// 🕵️ only `delay` is tracked
+		const interval = setInterval(() => a++, delay)
+		// 🧹 clear interval every update
+		return () => clearInterval(interval)
+	})
+</script>
+
+<button onclick={() => delay += 100}>+</button>
+<span>{a}</span>
+<button onclick={() => delay -= 100}>-</button>
+```
+
+<Card type="warning">
+	Values that are read <b>asynchronously</b> inside promises and timers are <b>not tracked</b> inside effects.
+</Card>
+
+When it comes to deeply reactive state, effects only rerun when the object it reads changes and not its properties:
+
+```svelte:App.svelte {5-6,10-11}
+<script lang="ts">
+	let obj = $state({ current: 0 })
+
+	$effect(() => {
+		// runs when `obj` changes
+		console.log(obj)
+	})
+
+	$effect(() => {
+		// runs when `obj.property` changes
+		console.log(obj.current)
+	})
+</script>
+```
+
+There are ways around it though! You can use `JSON.stringify`, `$state.snapshot`, or the `$inspect` rune to react when the object properties change. I log the value as an example, but you can do anything you want:
+
+```svelte:App.svelte {5-6,10-11}
+<script lang="ts">
+	let obj = $state({ current: 0 })
+
+	$effect(() => {
+		JSON.stringify(obj)
+		console.log(obj) // 👍️
+	})
+
+	$effect(() => {
+		$state.snapshot(obj)
+		console.log(obj) // 👍️
+	})
+
+	$effect(() => {
+		$inspect(obj)
+		console.log(obj) // 👍️
+	})
+</script>
+```
+
+**Don't use effects to sync state** because Svelte queues effects and runs them after everything is updated. Using effects to sync state can cause unexpected behaviors like the value being out of sync:
 
 ```svelte:App.svelte {5-8,12-13}
 <script lang="ts">
-	let count = $state(0)
-	let double = $state(0)
+	let a = $state(0)
+	let b = $state(0)
 
 	$effect(() => {
 		// effects are queued and run last
-		double = count * 2
+		b = a * 2
 	})
 </script>
 
 <button onclick={() => {
-	count++ // 1
-	console.log(double) // ⚠️ 0
+	a++ // 1
+	console.log(b) // ⚠️ 0
 }}>
-	{double}
+	{b}
 </button>
 ```
 
-**Always derive your state** using the `$derived` rune when you can and reach for the `$effect` rune sparingly:
+**Always derive state** when you can instead:
 
 ```svelte:App.svelte {3,7-8}
 <script lang="ts">
-	let count = $state(0)
-	let double = $derived(count * 2)
+	let a = $state(0)
+	let b = $derived(a * 2)
 </script>
 
 <button onclick={() => {
-	count++ // 1
-	console.log(double) // 👍️ 2
+	a++ // 1
+	console.log(b) // 👍️ 2
 }}>
-	{double}
+	{b}
 </button>
 ```
 
@@ -834,30 +909,52 @@ Using effects to sync state can cause unexpected behaviors like the value being 
 	Derived values are effects under the hood, but they rerun immediately when their dependencies change.
 </Card>
 
-Effects are mostly used to synchronize with external systems that don't understand Svelte's reactivity and should only be used for side-effects like fetching data from an API, or working with the DOM directly:
+Effects are meant as a last resort when you have to synchronize with an external system that doesn't understand Svelte's reactivity and should only be used for side-effects like fetching data from an API, or working with the DOM directly:
 
 ```svelte:App.svelte
-<script>
-	let pokemon = $state()
+<script lang="ts">
+	import { getAbortSignal } from 'svelte'
+
+	let pokemon = $state('charizard')
+	let image = $state(')
+
+	async function getPokemon(pokemon: string) {
+		const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${pokemon}`, {
+			// aborts when derived and effect reruns
+			signal: getAbortSignal()
+		})
+		if (!response.ok) throw new Error('💣️ oops!')
+		return response.json()
+	}
 
 	$effect(() => {
-		const savedPokemon = localStorage.getItem('pokemon')
-
-		if (!savedPokemon) {
-			fetch('https://pokeapi.co/api/v2/pokemon')
-				.then((response) => response.json())
-				.then((data) => {
-					pokemon = data
-					localStorage.setItem('pokemon', JSON.stringify(data))
-				})
-		} else {
-			pokemon = JSON.parse(savedPokemon)
-		}
+		getPokemon(pokemon).then(data => {
+			image = data.sprites.front_default
+		})
 	})
 </script>
 
-<pre>{JSON.stringify(pokemon, null, 2)}</pre>
+<!-- more on this later 😉 -->
+<input bind:value={pokemon} type="search" />
+<img src={image} alt={pokemon} />
 ```
+
+If you want to do something **once** when the component is added, you can use the `onMount` lifecycle function instead of an effect:
+
+```svelte:App.svelte
+<script lang="ts">
+	import { onMount } from 'svelte'
+
+	onMount(() => {
+		console.log('I run once 👋')
+		return () => console.log('🧹 cleanup')
+	})
+</script>
+```
+
+<Card type="warning">
+	Avoid passing async callbacks to <code>onMount</code> and <code>$effect</code> as any cleanup function they have won't run. You can invoke async functions, or an <a href="https://developer.mozilla.org/en-US/docs/Glossary/IIFE" target="_blank">IIFE</a> inside them instead.
+</Card>
 
 ### Encapsulating State
 
@@ -903,17 +1000,17 @@ class Config {
 export const config = new Config()
 ```
 
-## Signals Reactivity Aside
+## Reactivity Aside
 
 I believe understanding how things work give you a greater enjoyment by being more competent at what you do.
 
 I probably mentioned how Svelte uses signals for reactivity, but signals aren't unique to Svelte! You can find them in other frameworks like Angular, Solid, Vue, Qwik, and more. There's even a [proposal to add signals to JavaScript](https://github.com/tc39/proposal-signals) itself.
 
-So far we learned that assignments trigger updates in Svelte. There's nothing special about `=` though! In this example, it just creates a function call to update the value:
+So far we learned that assignments cause updates in Svelte. There's nothing special about `=` though! It just creates a function call to update the value:
 
-```svelte:example {2-3}
+```svelte:example {3}
 <script lang="ts">
-	let value = $state('🍎') // let value = state('🍎')
+	let value = $state('🍎')
 	value = '🍌' // set(value, '🍌')
 </script>
 
@@ -921,16 +1018,16 @@ So far we learned that assignments trigger updates in Svelte. There's nothing sp
 {value}
 ```
 
-A signal is just a container that holds subscribers. You need effects to react to signals. This means effects are functions that run when a signal changes.
+A signal is just a container that holds subscribers, so it doesn't do anything on its own. You need effects to react to signals and effects are just functions that run when a signal changes.
 
-In Svelte, everything is an effect! Everything starts with a root effect and your component is a nested effect inside of it.
-
-The magic happens when you read a signal inside of an effect, which happens to be the template:
+In Svelte, everything is an effect! That's how you update the DOM when state changes:
 
 ```svelte:example
 <!-- template_effect(() => set_text(text, get(value))) -->
 {value}
 ```
+
+Everything starts with a root effect and your component is a nested effect inside of it.
 
 The effect runs the function and sets it as the active effect in some variable:
 
@@ -943,24 +1040,68 @@ function template_effect(fn) {
 }
 ```
 
-When `count` is read it adds the active effect as a subscriber:
+The magic happens when you read a signal inside of an effect. When `value` is read it adds the active effect as a subscriber:
 
 ```ts:example
-let context = effect
+let context = fn
 
-function get(count) {
-	count.subscribers.add(context)
+function get(signal) {
+	signal.subscribers.add(context)
 	// ...
 }
 ```
 
-Later, when you update `count`, it notifies the subscribers. This happens every update and that's why it's called **runtime reactivity**, because it happens as your code runs!
+Later, when you write to `count` it notifies the subscribers and recreates the dependency graph:
 
-Svelte doesn't compile the reactivity, but hides the implementation details — you can use `count` as a normal value, instead of having to use functions like `get` and `set` everywhere.
+```ts:example
+function set(signal, value) {
+	signal.subscribers.forEach(fn => fn(value))
+	// ...
+}
+```
 
-Deriveds are also effects! That's why you can pass a function with state to a derived and it just works because it's read inside the derived and becomes a dependency.
+This is oversimplified, but it happens every update and that's why it's called **runtime reactivity**, because it happens as your code runs!
 
-That is also why we have to use a function `() => value`, or a getter `get() { return value }` to get the latest value when the effect reruns. Otherwise, you just get the same value.
+Svelte doesn't compile reactivity, but the implementation details. As far as you're concerned, state is a regular value. In other frameworks that implement signals you have to invoke functions like `value()` and `setValue()` to read and write values — which is fine, some people prefer that!
+
+Deriveds are also effects! That's how they're able to track dependencies. You can pass a function with state to a derived and it's tracked when it's read inside of an effect:
+
+```svelte:example {6-7}
+<script lang="ts">
+	let value = $state('🍎')
+	let code = $derived(getCode())
+
+	function getCode() {
+		// read inside derived effect
+		return value.codePointAt(0).toString(16)
+	}
+
+	value = '🍌'
+</script>
+
+<!-- read inside template effect -->
+{code}
+```
+
+That is why we have to use a function or a getter for the latest value when the effect reruns. If `emoji.code` was a regular value, then `() => set_text(text, emoji.code)` would always return the same value, even though it reacts to the change:
+
+```svelte:example {4-6,14-15}
+<script lang="ts">
+	class Emoji {
+		constructor(emoji: string) {
+			// turned into get/set methods
+			this.current = $state(emoji)
+			this.code = $derived(this.current.codePointAt(0).toString(16))
+		}
+	}
+
+	const emoji = new Emoji('🍎')
+	emoji.current = '🍌'
+</script>
+
+<!-- template_effect(() => set_text(text, emoji.code)) -->
+{emoji.code}
+```
 
 As the React people love to say, "it's just JavaScript!" 😄
 
@@ -2919,3 +3060,7 @@ Thankfully, Svelte has a [createSubscriber](https://svelte.dev/docs/svelte/svelt
 This makes our code much simpler. We don't need extra state to keep track of the time. Instead, we can just return and set the current time for the timeline using the methods it provides. Also, we can easily do a cleanup! 🧹
 
 How it works is that `createSubscriber` uses an effect that watches a value that increments when `update` runs, and reruns subscribers while keeping track of the active effects.
+
+## Ecosystem
+
+## Using Svelte With AI

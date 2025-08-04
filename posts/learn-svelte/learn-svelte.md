@@ -69,6 +69,10 @@ Svelte also has a more opinionated application framework called [SvelteKit](http
 
 You can try Svelte in the browser using the [Svelte Playground](https://svelte.dev/playground) and follow along without having to set up anything.
 
+<Card type="warning">
+	Some of the examples use browser APIs like <code>localStorage</code> that aren't supported in the Svelte Playground.
+</Card>
+
 If you're a creature of comfort and prefer your development environment, you can scaffold a Vite project and pick Svelte as the option from the CLI if you run `npm create vite@latest` in a terminal — you're going to need [Node.js](https://nodejs.org/) for that.
 
 I also recommend using the [Svelte for VS Code extension](https://marketplace.visualstudio.com/items?itemName=svelte.svelte-vscode) for syntax highlighting and code completion, or a similar extension for your editor.
@@ -758,11 +762,6 @@ Going back to a previous example, you can also use derived state to keep reactiv
 
 ### Effects
 
-TODO:
-
-- mention branching
-- $effect.pre
-
 The last main rune you should know about is the `$effect` rune.
 
 Effects are functions that run when the component is added to the DOM and when their dependencies change. State that is **read** inside of an effect will be tracked:
@@ -777,6 +776,24 @@ Effects are functions that run when the component is added to the DOM and when t
 	})
 </script>
 
+<button onclick={() => count++}>Click</button>
+```
+
+**Values are only tracked inside of the effect if they're read.** If `condition` is `true` in the example, then both `condition` and `count` are going to be tracked. If `condition` is false, then the effect is only going to rerun when `condition` changes:
+
+```svelte:App.svelte {3,6-8}
+<script lang="ts">
+	let count = $state(0)
+	let condition = $state(false)
+
+	$effect(() => {
+		if (condition) {
+			console.log(count) // 📖
+		}
+	})
+</script>
+
+<button onclick={() => condition = !condition}>Toggle</button>
 <button onclick={() => count++}>Click</button>
 ```
 
@@ -818,9 +835,9 @@ You can return a function from the effect callback, which reruns when the effect
 	})
 </script>
 
-<button onclick={() => delay += 100}>+</button>
+<button onclick={() => delay *= 2}>+</button>
 <span>{count}</span>
-<button onclick={() => delay -= 100}>-</button>
+<button onclick={() => delay /= 2}>-</button>
 ```
 
 <Card type="warning">
@@ -956,6 +973,66 @@ If you want to do something **once** when the component is added, you can use th
 <Card type="warning">
 	Avoid passing async callbacks to <code>onMount</code> and <code>$effect</code> as any cleanup function they have won't run. You can use async functions, or an <a href="https://developer.mozilla.org/en-US/docs/Glossary/IIFE" target="_blank">IIFE</a> inside them instead.
 </Card>
+
+Your effects run after the DOM updates in a [microtask](https://developer.mozilla.org/en-US/docs/Web/API/HTML_DOM_API/Microtask_guide), but sometimes you might need to do something before the DOM updates. In that case, you can use the `$effect.pre` rune:
+
+```svelte:App.svelte
+<script lang="ts">
+	import { tick } from 'svelte'
+	import { fly } from 'svelte/transition'
+
+	let div = $state()
+	let messages = $state([])
+
+	$effect.pre(() => {
+		// runs before the element is added
+		if (!div) return
+
+		// track `messages` as dependency
+		messages.length
+
+		const visibleHeight = div.offsetHeight
+		const scrolledAmount = div.scrollTop
+		const totalHeight = div.scrollHeight
+		const threshold = 40
+
+		// get the state of the element before the DOM is updated
+		if (visibleHeight + scrolledAmount > totalHeight - threshold) {
+			// wait for the DOM to update
+			tick().then(() => {
+				// scroll to the bottom
+				div.scrollTo({ top: div.scrollHeight, behavior: 'smooth' })
+			})
+		}
+	})
+
+	setInterval(() => messages.push('Matia: Svelte ❤️'), 400)
+</script>
+
+<div bind:this={div}>
+	{#each messages as message}
+		<p transition:fly={{ x: -100 }}>{message}</p>
+	{/each}
+</div>
+
+<style>
+	div {
+		height: 400px;
+		background: #222;
+		border-radius: 8px;
+		overflow-y: scroll;
+
+		p {
+			padding: 4px;
+			margin: 0px;
+
+			&:nth-child(odd) {
+				background: #333;
+			}
+		}
+	}
+</style>
+```
 
 ### Encapsulating State
 
@@ -1113,18 +1190,20 @@ As the React people love to say, "it's just JavaScript!" 😄
 
 ## Template Logic
 
+TODO: keyed block
+
 There are no conditionals and loops in HTML unless you're using a templating language. In Svelte, you can use the `#if` block to conditionally render content:
 
 ```svelte:App.svelte
 <script>
-	let user = $state({ loggedIn: false })
+	let user = $state({ authed: false })
 
 	function toggle() {
-		user.loggedIn = !user.loggedIn
+		user.authed = !user.authed
 	}
 </script>
 
-{#if user.loggedIn}
+{#if user.authed}
   <button onclick={toggle}>Log out</button>
 {:else}
 	<button onclick={toggle}>Log in</button>
@@ -1135,12 +1214,12 @@ To loop over a list of items, you use the `#each` block:
 
 ```svelte:App.svelte
 <script>
-	let todos = [
+	let todos = $state([
 		{ id: 1, text: 'Todo 1', done: true },
 		{ id: 2, text: 'Todo 2', done: false },
 		{ id: 3, text: 'Todo 3', done: false },
 		{ id: 4, text: 'Todo 4', done: false },
-	]
+	])
 </script>
 
 <ul>
@@ -1204,16 +1283,11 @@ Thankfully, Svelte has a built-in solution for async data loading using the `#aw
 
 ```svelte:App.svelte
 <script lang="ts">
-	type Pokemon = {
-		name: string
-		image: string
-	}
-
 	async function getPokemon(pokemon: string) {
 		let response = await fetch(`https://pokeapi.co/api/v2/pokemon/${pokemon}`)
 		if (!response.ok) throw new Error('💣️ oops!')
 		let { name, sprites } = await response.json()
-		return { name, image: sprites['front_default'] } as Pokemon
+		return { name, image: sprites['front_default'] }
 	}
 </script>
 
@@ -1226,6 +1300,8 @@ Thankfully, Svelte has a built-in solution for async data loading using the `#aw
 	<p>{error.message}</p>
 {/await}
 ```
+
+TODO: update this with recent changes in mind
 
 In the near future, you're going to be able to `await` a promise directly in a Svelte component. You can try it today by enabling the [experimental async flag](https://github.com/sveltejs/svelte/discussions/15845) in your Svelte config:
 
@@ -1242,9 +1318,8 @@ export default {
 At the moment you have to create a [boundary](https://svelte.dev/docs/svelte/svelte-boundary) which you can put at the root of your app, or where you want to use the `await` keyword:
 
 ```svelte:App.svelte
-<script>
-	// pretend this is an import
-	import { getPokemon } from 'api/pokemon'
+<script lang="ts">
+	import { getPokemon } from './api.ts'
 
 	// you could `await` the data here if the boundary was declared higher up
 	let pokemon = getPokemon('charizard')
@@ -1267,6 +1342,8 @@ At the moment you have to create a [boundary](https://svelte.dev/docs/svelte/sve
 ```
 
 ## Listening To Events
+
+TODO: bubbling
 
 Events in Svelte use the same naming convention as standard [JavaScript events](https://developer.mozilla.org/en-US/docs/Web/Events#event_listing).
 

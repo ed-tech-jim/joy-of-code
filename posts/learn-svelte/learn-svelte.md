@@ -913,7 +913,7 @@ You can use `JSON.stringify`, `$state.snapshot`, or the `$inspect` rune to react
 ```svelte:App.svelte {3,7-8}
 <script lang="ts">
 	let count = $state(0)
-	let double = $derived(a * 2)
+	let double = $derived(count * 2)
 </script>
 
 <button onclick={() => {
@@ -974,71 +974,184 @@ If you want to do something **once** when the component is added, you can use th
 	Avoid passing async callbacks to <code>onMount</code> and <code>$effect</code> as any cleanup function they have won't run. You can use async functions, or an <a href="https://developer.mozilla.org/en-US/docs/Glossary/IIFE" target="_blank">IIFE</a> inside them instead.
 </Card>
 
-Your effects run after the DOM updates in a [microtask](https://developer.mozilla.org/en-US/docs/Web/API/HTML_DOM_API/Microtask_guide), but sometimes you might need to do something before the DOM updates. In that case, you can use the `$effect.pre` rune:
+Your effects run after the DOM updates in a [microtask](https://developer.mozilla.org/en-US/docs/Web/API/HTML_DOM_API/Microtask_guide), but sometimes you might need to do work before the DOM updates like measuring an element, or scroll position. One great example is the [GSAP Flip plugin](https://gsap.com/docs/v3/Plugins/Flip/) for animating view changes when you update the DOM. It needs to measure the position, size, and rotation of the element before and after the DOM update. In that case, you can use the `$effect.pre` rune that runs before the DOM updates:
 
 ```svelte:App.svelte
 <script lang="ts">
+	import { gsap } from 'gsap'
+	import { Flip } from 'gsap/Flip'
 	import { tick } from 'svelte'
-	import { fly } from 'svelte/transition'
 
-	let div = $state()
-	let messages = $state([])
+	gsap.registerPlugin(Flip)
+
+	let items = $state([...Array(20).keys()])
 
 	$effect.pre(() => {
-		// runs before the element is added
-		if (!div) return
+		// track `items` as a dependency
+		items
 
-		// track `messages` as dependency
-		messages.length
+		// record the element state before the DOM updates
+		const state = Flip.getState('.item')
 
-		const visibleHeight = div.offsetHeight
-		const scrolledAmount = div.scrollTop
-		const totalHeight = div.scrollHeight
-		const threshold = 40
-
-		// get the state of the element before the DOM is updated
-		if (visibleHeight + scrolledAmount > totalHeight - threshold) {
-			// wait for the DOM to update
-			tick().then(() => {
-				// scroll to the bottom
-				div.scrollTo({ top: div.scrollHeight, behavior: 'smooth' })
-			})
-		}
+		// wait after the DOM updates
+		tick().then(() => {
+			// do the FLIP animation
+			Flip.from(state, { duration: 1, stagger: 0.01, ease: 'power1.inOut' })
+		})
 	})
 
-	setInterval(() => messages.push('Matia: Svelte ❤️'), 400)
+	function shuffle() {
+		items = items.toSorted(() => Math.random() - 0.5)
+	}
 </script>
 
-<div bind:this={div}>
-	{#each messages as message}
-		<p transition:fly={{ x: -100 }}>{message}</p>
+<div class="container">
+	{#each items as item (item)}
+		<div class="item">{item}</div>
 	{/each}
 </div>
 
+<button onclick={shuffle}>Shuffle</button>
+
 <style>
-	div {
-		height: 400px;
-		background: #222;
-		border-radius: 8px;
-		overflow-y: scroll;
+	.container {
+		width: 600px;
+		display: grid;
+		grid-template-columns: repeat(5, 1fr);
+		gap: 0.5rem;
+		color: orangered;
+		font-size: 3rem;
+		font-weight: 700;
+		text-shadow: 2px 2px 0px #000;
 
-		p {
-			padding: 4px;
-			margin: 0px;
-
-			&:nth-child(odd) {
-				background: #333;
-			}
+		.item {
+			display: grid;
+			place-content: center;
+			aspect-ratio: 1;
+			background-color: #222;
+			border: 1px solid #333;
+			border-radius: 1rem;
 		}
+	}
+
+	button {
+		margin-top: 1rem;
+		font-size: 2rem;
 	}
 </style>
 ```
 
 ### Encapsulating State
 
+Being able to reuse code you write is a staple of software development. So far, we only used state at the top-level of our components, but you can use state, deriveds, and effects inside functions and classes you can use in your components.
+
+The only requirement is to name the file `.svelte.js` for JavaScript files, or `.svelte.ts` for TypeScript files so Svelte knows it's a special file and doesn't have to check every file for runes.
+
+Here's an example of a `createCounter` function:
+
+```ts:counter.svelte.ts
+export function createCounter(initial = 0) {
+	let current = $state(initial)
+
+	const increment = () => current++
+	const decrement = () => current--
+
+	return {
+		get current() { return current },
+		set current(v) { current = v },
+		increment,
+		decrement
+	}
+}
+```
+
+Here's how it's used inside of a Svelte component:
+
+```svelte:App.svelte
+<script lang="ts">
+	import { createCounter } from './counter.svelte.ts'
+
+	const counter = createCounter(0)
+</script>
+
+<button onclick={counter.decrement}>-</button>
+<span>{counter.current}</span>
+<button onclick={counter.increment}>+</button>
+```
+
+You're probably wondering what's the deal with the `get` and `set` functions? Those are called **getters and setters**, and they create **accessor properties** which let you define custom behavior when you read and write to a property using a cleaner syntax. You could use functions instead, but the syntax is not as nice:
+
+```ts:counter.svelte.ts {8-9}
+export function createCounter(initial = 0) {
+	let current = $state(initial)
+
+	const increment = () => current++
+	const decrement = () => current--
+
+	return {
+		current() { return current },
+		setCurrent(v) { current = v },
+		increment,
+		decrement
+	}
+}
+```
+
+Now you have to invoke functions everywhere:
+
+```svelte:App.svelte {7-9}
+<script lang="ts">
+	import { createCounter } from './counter.svelte.ts'
+
+	const counter = createCounter(0)
+</script>
+
+<button onclick={() => counter.setCurrent(counter.current() + 1)}>
+	{counter.current()}
+</button>
+```
+
+Let's compare this to using accessors:
+
+```svelte:App.svelte {7-9}
+<script lang="ts">
+	import { createCounter } from './counter.svelte.ts'
+
+	const counter = createCounter(0)
+</script>
+
+<button onclick={() => counter.current++}>
+	{counter.current}
+</button>
+```
+
+That looks a lot better! 😄
+
+You might be wondering, can't you just return state?
+
+```ts:counter.svelte.ts
+export function createCounter(initial = 0) {
+	let current = $state(initial)
+	// ⛔️ this doesn't work
+	return { current }
+}
+```
+
+The reason this doesn't work is because state is just a regular value. It's not some magic reactive container. If you want something like that, you could return deeply reactive proxied state:
+
+```ts:counter.svelte.ts
+export function createCounter(initial = 0) {
+	let count = $state({ current: initial })
+	// 👍️ proxied state
+	return count
+}
+```
+
+That's the same reason why you can't pass state to a function and expect it to be reactive.
+
 ### Global State
 
-So far we've only used reactivity inside Svelte components. In the past, Svelte even had writable stores, because it used compile-time reactivity which didn't work outside of components.
+So far, we've only used reactivity inside Svelte components. In the past, Svelte even had writable stores, because it used compile-time reactivity which didn't work outside of components.
 
 Thankfully, we can use runes outside of Svelte components! You only have to include the `.svelte.js` extension for JavaScript files, or `.svelte.ts` for TypeScript files, so Svelte doesn't have to check every file for runes.
 

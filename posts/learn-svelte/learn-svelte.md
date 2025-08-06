@@ -1041,9 +1041,7 @@ Your effects run after the DOM updates in a [microtask](https://developer.mozill
 </style>
 ```
 
-### Encapsulating State
-
-TODO: rename to universal reactivity
+### Using State In Functions And Classes
 
 Being able to reuse code you write is a staple of software development. So far, we only used state at the top-level of our components, but you can use state, deriveds, and effects inside functions and classes which can be used in your components.
 
@@ -1052,19 +1050,19 @@ If those functions and classes are declared inside of a file, you have to use th
 Here's an example of a `createCounter` function:
 
 ```ts:counter.svelte.ts
-export function createCounter(initial = 0) {
-	let current = $state(initial)
+export function createCounter(initial: number) {
+	let count = $state(initial)
 
 	$effect(() => {
-		console.log(current)
+		console.log(count)
 	})
 
-	const increment = () => current++
-	const decrement = () => current--
+	const increment = () => count++
+	const decrement = () => count--
 
 	return {
-		get current() { return current },
-		set current(v) { current = v },
+		get count() { return count },
+		set count(v) { count = v },
 		increment,
 		decrement
 	}
@@ -1081,29 +1079,29 @@ Here's how it's used inside of a Svelte component:
 </script>
 
 <button onclick={counter.decrement}>-</button>
-<span>{counter.current}</span>
+<span>{counter.count}</span>
 <button onclick={counter.increment}>+</button>
 ```
 
 You're probably wondering what's the deal with the `get` and `set` functions? Those are called **getters and setters**, and they create **accessor properties** which let you define custom behavior when you read and write to a property using a cleaner syntax. You could use functions instead, but the syntax is not as nice:
 
 ```ts:counter.svelte.ts {8-9}
-export function createCounter(initial = 0) {
-	let current = $state(initial)
+export function createCounter(initial: number) {
+	let count = $state(initial)
 
-	const increment = () => current++
-	const decrement = () => current--
+	const increment = () => count++
+	const decrement = () => count--
 
 	return {
-		current() { return current },
-		setCurrent(v: number) { current = v },
+		count() { return count },
+		setCount(v: number) { count = v },
 		increment,
 		decrement
 	}
 }
 ```
 
-We could make the API a lot nicer and return a tuple like `[current, setCurrent] = createCounter(0)`, but you still have to use functions everywhere:
+We could make the API nicer and return a tuple like `[count, setCount] = createCounter(0)`, but you still have to use functions everywhere:
 
 ```svelte:App.svelte {7-9}
 <script lang="ts">
@@ -1112,8 +1110,8 @@ We could make the API a lot nicer and return a tuple like `[current, setCurrent]
 	const counter = createCounter(0)
 </script>
 
-<button onclick={() => counter.setCurrent(counter.current() + 1)}>
-	{counter.current()}
+<button onclick={() => counter.setCurrent(counter.count() + 1)}>
+	{counter.count()}
 </button>
 ```
 
@@ -1126,25 +1124,25 @@ Let's compare this to using accessors:
 	const counter = createCounter(0)
 </script>
 
-<button onclick={() => counter.current++}>
-	{counter.current}
+<button onclick={() => counter.count++}>
+	{counter.count}
 </button>
 ```
 
 That syntax looks a lot nicer! 😄 You might be wondering, can't you just return state from the function?
 
 ```ts:counter.svelte.ts
-export function createCounter(initial = 0) {
-	let current = $state(initial)
+export function createCounter(initial: number) {
+	let count = $state(initial)
 	// ⛔️ this doesn't work
-	return { current }
+	return { count }
 }
 ```
 
 The reason this doesn't work is because **state is just a regular value**. It's **not** some magic reactive container. If you want something like that, you could return deeply reactive proxied state:
 
 ```ts:counter.svelte.ts
-export function createCounter(initial = 0) {
+export function createCounter(initial: number) {
 	let count = $state({ current: initial })
 	// 👍️ proxied state
 	return count
@@ -1160,7 +1158,7 @@ export function reactive<T>(initial: T) {
 	return value
 }
 
-export function createCounter(initial = 0) {
+export function createCounter(initial: number) {
 	// reactive container
 	let count = reactive(initial)
 
@@ -1185,51 +1183,40 @@ Even destructuring works, since `count` is not just a regular value:
 </button>
 ```
 
-This seems super useful...so why doesn't Svelte provide a utility for this?
+That seems super useful...so why doesn't Svelte provide this utility?
 
-The reason Svelte doesn't provide such a utility is because you're encouraged to use classes, which give you certain benefits when using state inside of them:
+It's mostly because you can write one yourself in a couple of lines of code, but there's another reason. The reason Svelte doesn't provide such a utility is because you're encouraged to use classes, which give you certain benefits when using state inside of them.
 
-```ts:counter.svelte.ts
+Any class fields declared with state are turned into private fields with matching `get`/`set` methods by Svelte for convenience, unless you declare them yourself:
+
+```ts:counter.svelte.ts {3-4}
 export class Counter {
-	constructor(initial = 0) {
-		this.current = $state(initial)
+	constructor(initial: number) {
+		// turned into `get` and `set` methods
+		this.count = $state(initial)
 	}
 
 	increment() {
-		this.current++
+		this.count++
 	}
 
 	decrement() {
-		this.current--
+		this.count--
 	}
 }
 ```
 
-Svelte turns any class fields declared with state into private fields with matching `get`/`set` methods, unless you declare them yourself:
+If you look at the output, you would see something like this:
 
 ```ts:output
 class Counter {
-	#current
-	get current() { ... }
-	set current(value) { ... }
+	#count
+	get count() { ... }
+	set count(v) { ... }
 }
 ```
 
-This works the same as before:
-
-```svelte:App.svelte
-<script lang="ts">
-	import { Counter } from './counter.svelte'
-
-	const counter = new Counter(0)
-</script>
-
-<button onclick={() => count.current++}>
-	{count.current}
-</button>
-```
-
-There's only one gotcha with classes, and that's how `this` works. Using the increment and decrement methods doesn't work here, because `this` refers to the button:
+There's only one gotcha with classes. Using methods like `counter.increment` inside `onclick` doesn't work, because `this` refers to the context where it ran and that's the button:
 
 ```svelte:App.svelte
 <script lang="ts">
@@ -1243,7 +1230,7 @@ There's only one gotcha with classes, and that's how `this` works. Using the inc
 <button onclick={counter.increment}>+</button>
 ```
 
-You either have to pass the methods inside a function and invoke it, or use arrow functions that don't have `this` bound:
+You either have to use a function like `() => counter.increment()` or define the methods using arrow functions that don't bind to `this`:
 
 ```ts:counter.svelte.ts {6-8,10-12}
 export class Counter {
@@ -1261,53 +1248,124 @@ export class Counter {
 }
 ```
 
-That's the same reason why you can't pass state to a function and expect it to be reactive.
+Now that you understand how state is a regular value, it also makes sense you can't pass it to a function or class and expect it to be reactive.
 
-### Global State
+In this example, we pass `count` to a `Doubler` class in hopes that it will double the value when `count` updates. However, it **doesn't** work because `count` is a regular value when it's evaluated:
 
-So far, we've only used reactivity inside Svelte components. In the past, Svelte even had writable stores, because it used compile-time reactivity which didn't work outside of components.
+```svelte:App.svelte {2-6,9}
+<script lang="ts">
+	class Doubler {
+		constructor(count: number) {
+			this.current = $derived(count * 2)
+		}
+	}
 
-Thankfully, we can use runes outside of Svelte components! You only have to include the `.svelte.js` extension for JavaScript files, or `.svelte.ts` for TypeScript files, so Svelte doesn't have to check every file for runes.
+	let count = $state(0)
+	const double = new Doubler(count)
+</script>
 
-Here's how you can create global state in Svelte, like a config which can be used across your app:
+<button onclick={() => count++}>
+	{double.current}
+</button>
+```
+
+Svelte even gives you a warning with a hint:
+
+> This reference only captures the initial value of `count`. Did you mean to reference it inside a closure instead?
+
+The hint is that your value is never going to update because it's a regular value, so we can pass a function to get the latest value:
+
+```svelte:App.svelte {3-5,9}
+<script lang="ts">
+	class Doubler {
+		constructor(count: () => number) {
+			this.value = $derived(count() * 2)
+		}
+	}
+
+	let count = $state(0)
+	const doubler = new Doubler(() => count)
+</script>
+
+<button onclick={() => count++}>
+	{doubler.value}
+</button>
+```
+
+Remember the `reactive` utility we talked about earlier? You could also use that! Let's use a class version this time:
+
+```svelte:App.svelte {2-6,9-11,14-15}
+<script lang="ts">
+	class Reactive<T> {
+		constructor(initial: T) {
+			this.current = $state<T>(initial)
+		}
+	}
+
+	class Doubler {
+		constructor(count: Reactive<number>) {
+			this.current = $derived(count.current * 2)
+		}
+	}
+
+	const count = new Reactive(0)
+	const double = new Doubler(count)
+</script>
+
+<button onclick={() => count.current++}>
+	{double.current}
+</button>
+```
+
+### Using Reactive Global State
+
+Creating global reactive state in Svelte is simple as exporting deep state from a module, like a config which can be used across your app:
 
 ```ts:config.svelte.ts
-export const config = $state({ theme: 'light' })
+interface Config {
+	theme: 'light' | 'dark'
+}
+
+export const config = $state<Config>({ theme: 'dark' })
+
+export function toggleTheme() {
+	config.theme = config.theme === 'light' ? 'dark' : 'light'
+}
 ```
 
 ```svelte:App.svelte
 <script>
-	import { config } from './config.svelte'
-
-	function toggleTheme() {
-		config.theme = config.theme === 'light' ? 'dark' : 'light'
-	}
+	import { config, toggleTheme } from './config.svelte'
 </script>
 
-<button onclick={toggleTheme}>{config.theme}</button>
+<button onclick={toggleTheme}>
+	{config.theme}
+</button>
 ```
 
-Exporting regular state wouldn't work when we reassign the value, so we're exporting **proxied state**. You can use whichever method you prefer though, like a function or a class:
+You could use a function, or a class for the config:
 
 ```ts:config.svelte.ts
+type Themes = 'light' | 'dark'
+
 class Config {
-	#theme = $state('light')
+	theme = $state<Themes>('dark')
 
-	get theme() {
-		return this.#theme
-	}
-
-	set theme(newTheme) {
-		this.#theme = newTheme
+	toggleTheme() {
+		this.theme = this.theme === 'light' ? 'dark' : 'light'
 	}
 }
 
 export const config = new Config()
 ```
 
-## Reactivity Aside
+Knowing how state works is important to understand how Svelte works. It doesn't matter if you prefer functions or classes. As long as you understand how state works, you can bend it to your will.
 
-I believe understanding how things work give you a greater enjoyment by being more competent at what you do.
+To understand it even more, let's learn how reactivity works in Svelte.
+
+## How Svelte Reactivity Works
+
+I believe that understanding how things work gives you greater enjoyment by being more competent at what you do.
 
 I mentioned how Svelte uses signals for reactivity, but signals aren't unique to Svelte! You can find them in other frameworks like Angular, Solid, Vue, and Qwik. There's even a [proposal to add signals to JavaScript](https://github.com/tc39/proposal-signals) itself.
 
@@ -1399,7 +1457,7 @@ If `emoji.code` was a regular value, then `() => set_text(text, emoji.code)` wou
 <script lang="ts">
 	class Emoji {
 		constructor(emoji: string) {
-			// turned into get and set methods
+			// turned into `get` and `set` methods
 			this.current = $state(emoji)
 			this.code = $derived(this.current.codePointAt(0).toString(16))
 		}
@@ -1414,6 +1472,12 @@ If `emoji.code` was a regular value, then `() => set_text(text, emoji.code)` wou
 ```
 
 As the React people love to say, "it's just JavaScript!" 😄
+
+### Why You Should Avoid Effects
+
+Effects aren't evil, but they're a great footgun.
+
+You can easily overcomplicate your code by using effects, when an event handler is enough.
 
 ## Template Logic
 

@@ -1043,15 +1043,21 @@ Your effects run after the DOM updates in a [microtask](https://developer.mozill
 
 ### Encapsulating State
 
-Being able to reuse code you write is a staple of software development. So far, we only used state at the top-level of our components, but you can use state, deriveds, and effects inside functions and classes you can use in your components.
+TODO: rename to universal reactivity
 
-The only requirement is to name the file `.svelte.js` for JavaScript files, or `.svelte.ts` for TypeScript files so Svelte knows it's a special file and doesn't have to check every file for runes.
+Being able to reuse code you write is a staple of software development. So far, we only used state at the top-level of our components, but you can use state, deriveds, and effects inside functions and classes which can be used in your components.
+
+If those functions and classes are declared inside of a file, you have to use the `.svelte.js` or `.svelte.ts` extension to tell Svelte that it's a special file and doesn't have to check every file for runes.
 
 Here's an example of a `createCounter` function:
 
 ```ts:counter.svelte.ts
 export function createCounter(initial = 0) {
 	let current = $state(initial)
+
+	$effect(() => {
+		console.log(current)
+	})
 
 	const increment = () => current++
 	const decrement = () => current--
@@ -1069,7 +1075,7 @@ Here's how it's used inside of a Svelte component:
 
 ```svelte:App.svelte
 <script lang="ts">
-	import { createCounter } from './counter.svelte.ts'
+	import { createCounter } from './counter.svelte'
 
 	const counter = createCounter(0)
 </script>
@@ -1090,18 +1096,18 @@ export function createCounter(initial = 0) {
 
 	return {
 		current() { return current },
-		setCurrent(v) { current = v },
+		setCurrent(v: number) { current = v },
 		increment,
 		decrement
 	}
 }
 ```
 
-Now you have to invoke functions everywhere:
+We could make the API a lot nicer and return a tuple like `[current, setCurrent] = createCounter(0)`, but you still have to use functions everywhere:
 
 ```svelte:App.svelte {7-9}
 <script lang="ts">
-	import { createCounter } from './counter.svelte.ts'
+	import { createCounter } from './counter.svelte'
 
 	const counter = createCounter(0)
 </script>
@@ -1115,7 +1121,7 @@ Let's compare this to using accessors:
 
 ```svelte:App.svelte {7-9}
 <script lang="ts">
-	import { createCounter } from './counter.svelte.ts'
+	import { createCounter } from './counter.svelte'
 
 	const counter = createCounter(0)
 </script>
@@ -1125,9 +1131,7 @@ Let's compare this to using accessors:
 </button>
 ```
 
-That looks a lot better! 😄
-
-You might be wondering, can't you just return state?
+That syntax looks a lot nicer! 😄 You might be wondering, can't you just return state from the function?
 
 ```ts:counter.svelte.ts
 export function createCounter(initial = 0) {
@@ -1137,13 +1141,123 @@ export function createCounter(initial = 0) {
 }
 ```
 
-The reason this doesn't work is because state is just a regular value. It's not some magic reactive container. If you want something like that, you could return deeply reactive proxied state:
+The reason this doesn't work is because **state is just a regular value**. It's **not** some magic reactive container. If you want something like that, you could return deeply reactive proxied state:
 
 ```ts:counter.svelte.ts
 export function createCounter(initial = 0) {
 	let count = $state({ current: initial })
 	// 👍️ proxied state
 	return count
+}
+```
+
+You could create a "magic" reactive container yourself like some signal-based frameworks do for you:
+
+```ts:counter.svelte.ts {1-5,8-9}
+// this could be a personal utility
+export function reactive<T>(initial: T) {
+	let value = $state<{ current: T }>({ current: initial })
+	return value
+}
+
+export function createCounter(initial = 0) {
+	// reactive container
+	let count = reactive(initial)
+
+	const increment = () => count.current++
+	const decrement = () => count.current--
+
+	return { count, increment, decrement }
+}
+```
+
+Even destructuring works, since `count` is not just a regular value:
+
+```svelte:App.svelte {4}
+<script lang="ts">
+	import { createCounter } from './counter.svelte'
+
+	const { count } = createCounter(0)
+</script>
+
+<button onclick={() => count.current++}>
+	{count.current}
+</button>
+```
+
+This seems super useful...so why doesn't Svelte provide a utility for this?
+
+The reason Svelte doesn't provide such a utility is because you're encouraged to use classes, which give you certain benefits when using state inside of them:
+
+```ts:counter.svelte.ts
+export class Counter {
+	constructor(initial = 0) {
+		this.current = $state(initial)
+	}
+
+	increment() {
+		this.current++
+	}
+
+	decrement() {
+		this.current--
+	}
+}
+```
+
+Svelte turns any class fields declared with state into private fields with matching `get`/`set` methods, unless you declare them yourself:
+
+```ts:output
+class Counter {
+	#current
+	get current() { ... }
+	set current(value) { ... }
+}
+```
+
+This works the same as before:
+
+```svelte:App.svelte
+<script lang="ts">
+	import { Counter } from './counter.svelte'
+
+	const counter = new Counter(0)
+</script>
+
+<button onclick={() => count.current++}>
+	{count.current}
+</button>
+```
+
+There's only one gotcha with classes, and that's how `this` works. Using the increment and decrement methods doesn't work here, because `this` refers to the button:
+
+```svelte:App.svelte
+<script lang="ts">
+	import { Counter } from './counter.svelte'
+
+	const counter = new Counter(0)
+</script>
+
+<button onclick={counter.decrement}>-</button>
+<span>{counter.current}</span>
+<button onclick={counter.increment}>+</button>
+```
+
+You either have to pass the methods inside a function and invoke it, or use arrow functions that don't have `this` bound:
+
+```ts:counter.svelte.ts {6-8,10-12}
+export class Counter {
+	constructor(initial = 0) {
+		this.current = $state(initial)
+	}
+
+	increment = () =>
+		this.current++
+	}
+
+	decrement = () => {
+		this.current--
+	}
 }
 ```
 

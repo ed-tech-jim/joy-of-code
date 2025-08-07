@@ -1381,7 +1381,20 @@ So far we learned that assignments cause updates in Svelte. There's nothing spec
 {value}
 ```
 
-A signal is just a container that holds subscribers, so it doesn't do anything on its own. **You need effects to react to signals** and effects are just functions that run when a signal changes.
+A signal is just a container that holds a value and subscribers that are notified when that value updates, so it doesn't do anything on its own:
+
+```ts:example
+function createSignal(value) {
+	const signal = {
+		value: null,
+		subscribers: new Set(),
+		// ...
+	}
+	return signal
+}
+```
+
+**You need effects to react to signals** and effects are just functions that run when a signal changes.
 
 In JavaScript frameworks that implement signals for reactivity like Svelte, everything is an effect! That's how Svelte is able to update the DOM when state changes:
 
@@ -1409,26 +1422,25 @@ let effect = fn
 function get(signal) {
 	// add effect to subscribers
 	signal.subscribers.add(effect)
+	// return value
+	return signal.value
 }
 ```
 
-Later, when you write to `count` it notifies the subscribers and recreates the dependency graph:
+Later, when you write to `count` it notifies the subscribers and recreates the dependency graph when it reads the signal inside the effect:
 
 ```ts:example
 function set(signal, value) {
+	// update signal
+	signal.value = value
 	// notify subscribers
-	signal.subscribers.forEach(fn => fn(value))
-}
-
-// repeat...
-function get(signal) {
-	signal.subscribers.add(effect)
+	signal.subscribers.forEach(effect => effect())
 }
 ```
 
 This is oversimplified, but it happens every update and that's why it's called **runtime reactivity**, because it happens as your code runs!
 
-**Svelte doesn't compile reactivity**, only the implementation details. As far as you're concerned, state is a regular value. In other frameworks that implement signals you have to read and write values using `value()` and `setValue()` — which is fine if you prefer no "magic".
+**Svelte doesn't compile reactivity**, it only compiles the implementation details. As far as you're concerned, state is a regular value. In other frameworks that implement signals, you have to read and write them using `value()` and `setValue()` — which is fine if you prefer no "magic".
 
 Deriveds are also effects! That's how they're able to track dependencies. You can pass a function with state to a derived and it's tracked when it's read inside of an effect:
 
@@ -1449,9 +1461,9 @@ Deriveds are also effects! That's how they're able to track dependencies. You ca
 {code}
 ```
 
-I'm pointing this out because you might think how state is some magic reactive container, but it's just a regular value — which is why you need a function or a getter to get the latest value when the effect reruns, unless you're using deep state.
+I want to emphasize how `$state` is not some magic reactive container, but a regular value; which is why you need a function or a getter to get the latest value when the effect reruns — unless you're using deep state.
 
-If `emoji.code` was a regular value, then `() => set_text(text, emoji.code)` would always return the same value, even though it reacts to the change:
+If `emoji.code` was a regular value and not a getter, then `() => set_text(text, emoji.code)` would always return the same value, even though it reacts to the change:
 
 ```svelte:example {4-6,14-15}
 <script lang="ts">
@@ -1475,9 +1487,183 @@ As the React people love to say, "it's just JavaScript!" 😄
 
 ### Why You Should Avoid Effects
 
-Effects aren't evil, but they're a great footgun.
+Effects aren't evil, but they're great footguns.
 
-You can easily overcomplicate your code by using effects, when an event handler is enough.
+You can easily overcomplicate your code by using effects, when you could just do a side-effect inside your event handler.
+
+Let's say you have a `counter` value that you want to read and write to `localStorage`. That's a side-effect, so of course you might use an effect:
+
+```ts:counter.svelte.ts
+class Counter {
+	constructor(initial: number) {
+		this.count = $state(initial)
+
+		$effect(() => {
+			const savedCount = localStorage.getItem('count')
+			if (savedCount) this.count = parseInt(savedCount)
+		})
+
+		$effect(() => {
+			localStorage.setItem('count', this.count.toString())
+		})
+	}
+}
+```
+
+There's nothing wrong with this approach, but it's not ideal. Let's say you want to create a counter inside `counter.svelte.ts` to be shared with others:
+
+```ts:counter.svelte.ts
+// ...
+export const counter = new Counter(10)
+```
+
+Oops! There's an error:
+
+> effect_orphan `$effect` can only be used inside an effect (e.g. during component initialisation)
+
+In the previous section we learned that everything starts with a root component, so Svelte can run the teardown logic for effects when the component is removed. In this case, you're trying to create an effect outside that root effect which is not allowed.
+
+Svelte provides an advanced `$effect.root` to create your own root effect, but then you have to run the cleanup manually:
+
+```ts:counter.svelte.ts {5,15}
+class Counter {
+	constructor(initial: number) {
+		this.count = $state(initial)
+
+		// you have to run the cleanup manually
+		const cleanup = $effect.root(() => {
+			$effect(() => {
+				const savedCount = localStorage.getItem('count')
+				if (savedCount) this.count = parseInt(savedCount)
+			})
+
+			$effect(() => {
+				localStorage.setItem('count', this.count.toString())
+			})
+		})
+	}
+}
+```
+
+There's also an `$effect.tracking` function so the effect only runs in a **tracking context**, like the effect in your template:
+
+```ts:counter.svelte.ts {5,14}
+class Counter {
+	constructor(initial: number) {
+		this.count = $state(initial)
+
+		if ($effect.tracking()) {
+			$effect(() => {
+				const savedCount = localStorage.getItem('count')
+				if (savedCount) this.count = parseInt(savedCount)
+			})
+
+			$effect(() => {
+				localStorage.setItem('count', this.count.toString())
+			})
+		}
+	}
+}
+```
+
+But there's **another** problem! The effect is never going to run when you initialize the counter because you're not inside a tracking context. 😩
+
+Alright...let's move the effects to where you read and write the value, so it's read inside of a tracking context like the template effect:
+
+```ts:counter.svelte.ts {7-12,17}
+export class Counter {
+	constructor(initial: number) {
+		this.#count = $state(initial)
+	}
+
+	get count() {
+		if ($effect.tracking()) {
+			$effect(() => {
+				const savedCount = localStorage.getItem('count')
+				if (savedCount) this.#count = parseInt(savedCount)
+			})
+		}
+		return this.#count
+	}
+
+	set count(v: number) {
+		localStorage.setItem('count', v.toString())
+		this.#count = v
+	}
+}
+```
+
+Listen...I don't take pleasure in this, but there's _one more_ problem. Each time we read the value, we're creating an effect! 😱
+
+Alright, that's a simple fix. We can use a variable to track if we already ran the effect:
+
+```ts:counter.svelte.ts {2,11,14}
+export class Counter {
+	#first = true
+
+	constructor(initial: number) {
+		this.#count = $state(initial)
+	}
+
+	get count() {
+		if ($effect.tracking()) {
+			$effect(() => {
+				if (!this.#first) return
+				const savedCount = localStorage.getItem('count')
+				if (savedCount) this.#count = parseInt(savedCount)
+				this.#first = false
+			})
+		}
+		return this.#count
+	}
+
+	set count(v: number) {
+		localStorage.setItem('count', v.toString())
+		this.#count = v
+	}
+}
+```
+
+I know what you're thinking! **That's the point**. None of this is necessary. You can make everything simpler by avoiding effects and doing side-effects inside event handlers:
+
+```ts:counter.svelte.ts {2,9-13}
+export class Counter {
+	#first = true
+
+	constructor(initial: number) {
+		this.#count = $state(initial)
+	}
+
+	get count() {
+		if (this.#first) {
+			const savedCount = localStorage.getItem('count')
+			if (savedCount) this.#count = parseInt(savedCount)
+			this.#first = false
+		}
+		return this.#count
+	}
+
+	set count(v: number) {
+		localStorage.setItem('count', v.toString())
+		this.#count = v
+	}
+}
+```
+
+You can also include a check if the components runs on the server:
+
+```ts:counter.svelte.ts {2}
+get count() {
+	if (typeof window !== 'undefined' && this.#first) {
+		const savedCount = localStorage.getItem('count')
+		if (savedCount) this.#count = parseInt(savedCount)
+		this.#first = false
+	}
+	return this.#count
+}
+```
+
+Now you won't have any problems.
 
 ## Template Logic
 

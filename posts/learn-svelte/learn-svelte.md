@@ -506,7 +506,7 @@ The Svelte compiler knows that you're trying to update the `count` value and war
 
 This brings us to our first Svelte rune — the `$state` rune.
 
-### Reactive State
+## Reactive State
 
 The `$state` rune marks a variable as reactive. Svelte's reactivity is based on **assignments**. To update the UI, you just assign a new value to a reactive variable:
 
@@ -536,7 +536,7 @@ let value = $state<Type>(...)
 
 The three main runes we're going to learn about are the `$state`, `$derived`, and `$effect` rune.
 
-### Deeply Reactive State
+## Deeply Reactive State
 
 If you pass an array, or object to `$state` it becomes a deeply reactive [Proxy](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Proxy). This lets Svelte perform granular updates when you read or write properties and avoids mutating the state directly.
 
@@ -633,7 +633,7 @@ You should also be aware that destructuring state loses reactivity because it's 
 
 If you want to do this, you can use derived state!
 
-### Derived State
+## Derived State
 
 You can derive state from other state using the `$derived` rune and it's going to reactively update:
 
@@ -760,7 +760,7 @@ Going back to a previous example, you can also use derived state to keep reactiv
 {@html content}
 ```
 
-### Effects
+## Effects
 
 The last main rune you should know about is the `$effect` rune.
 
@@ -1041,7 +1041,7 @@ Your effects run after the DOM updates in a [microtask](https://developer.mozill
 </style>
 ```
 
-### Using State In Functions And Classes
+## State In Functions And Classes
 
 Being able to reuse code you write is a staple of software development. So far, we only used state at the top-level of our components, but you can use state, deriveds, and effects inside functions and classes which can be used in your components.
 
@@ -1317,7 +1317,7 @@ Remember the `reactive` utility we talked about earlier? You could also use that
 </button>
 ```
 
-### Using Reactive Global State
+## Reactive Global State
 
 Creating global reactive state in Svelte is simple as exporting deep state from a module, like a config which can be used across your app:
 
@@ -1485,7 +1485,7 @@ If `emoji.code` was a regular value and not a getter, then `() => set_text(text,
 
 As the React people love to say, "it's just JavaScript!" 😄
 
-### Why You Should Avoid Effects
+## Why You Should Avoid Effects
 
 Effects aren't evil, but they're great footguns.
 
@@ -1525,13 +1525,15 @@ In the previous section we learned that everything starts with a root component,
 
 Svelte provides an advanced `$effect.root` to create your own root effect, but then you have to run the cleanup manually:
 
-```ts:counter.svelte.ts {5,15}
+```ts:counter.svelte.ts {2,7-19,22-24}
 class Counter {
+	#cleanup
+
 	constructor(initial: number) {
 		this.count = $state(initial)
 
-		// you have to run the cleanup manually
-		const cleanup = $effect.root(() => {
+		// manual cleanup 😮‍💨
+		this.cleanup = $effect.root(() => {
 			$effect(() => {
 				const savedCount = localStorage.getItem('count')
 				if (savedCount) this.count = parseInt(savedCount)
@@ -1540,12 +1542,18 @@ class Counter {
 			$effect(() => {
 				localStorage.setItem('count', this.count.toString())
 			})
+
+			return () => console.log('🧹 cleanup')
 		})
+	}
+
+	cleanup() {
+		this.#cleanup()
 	}
 }
 ```
 
-There's also an `$effect.tracking` function so the effect only runs in a **tracking context**, like the effect in your template:
+There's also an `$effect.tracking` rune if you only want the effect to run in a **tracking context** like the effect in your template:
 
 ```ts:counter.svelte.ts {5,14}
 class Counter {
@@ -1566,9 +1574,7 @@ class Counter {
 }
 ```
 
-But there's **another** problem! The effect is never going to run when you initialize the counter because you're not inside a tracking context. 😩
-
-Alright...let's move the effects to where you read and write the value, so it's read inside of a tracking context like the template effect:
+But there's **another** problem! The effect is never going to run when the counter is created because you're not inside a tracking context. 😩 Alright...how about we move the effects to where you read and write the value inside of a tracking context like the template effect:
 
 ```ts:counter.svelte.ts {7-12,17}
 export class Counter {
@@ -1593,9 +1599,7 @@ export class Counter {
 }
 ```
 
-Listen...I don't take pleasure in this, but there's _one more_ problem. Each time we read the value, we're creating an effect! 😱
-
-Alright, that's a simple fix. We can use a variable to track if we already ran the effect:
+I don't take pleasure in this, but there's **one more** problem. Each time we read the value, we're creating an effect! 😱 Alright, that's a simple fix. We can use a variable to track if we already ran the effect:
 
 ```ts:counter.svelte.ts {2,11,14}
 export class Counter {
@@ -1624,7 +1628,7 @@ export class Counter {
 }
 ```
 
-I know what you're thinking! **That's the point**. None of this is necessary. You can make everything simpler by avoiding effects and doing side-effects inside event handlers:
+That works! 😄 I promise that's it. I know what you're thinking! **That's the point**. None of this is necessary. You can make everything simpler by avoiding effects and doing side-effects inside event handlers:
 
 ```ts:counter.svelte.ts {2,9-13}
 export class Counter {
@@ -1650,7 +1654,7 @@ export class Counter {
 }
 ```
 
-You can also include a check if the components runs on the server:
+You can also include a check if the component runs on the server:
 
 ```ts:counter.svelte.ts {2}
 get count() {
@@ -1663,13 +1667,25 @@ get count() {
 }
 ```
 
-Now you won't have any problems.
+Now you can share your favorite counter with the world and you won't have any problems, unless it's a skill issue:
 
-## Template Logic
+```svelte:App.svelte
+<script lang="ts">
+	import { counter } from './counter.svelte'
+</script>
 
-TODO: keyed block
+<button onclick={() => counter.count++}>
+	{counter.count}
+</button>
+```
 
-There are no conditionals and loops in HTML unless you're using a templating language. In Svelte, you can use the `#if` block to conditionally render content:
+## Control Flow Blocks
+
+There are no conditionals and loops in HTML, unless you're using a templating language.
+
+### Using Conditionals
+
+In Svelte, you can use the `#if` block to conditionally render content:
 
 ```svelte:App.svelte
 <script>
@@ -1686,6 +1702,8 @@ There are no conditionals and loops in HTML unless you're using a templating lan
 	<button onclick={toggle}>Log in</button>
 {/if}
 ```
+
+### Looping Over Data
 
 To loop over a list of items, you use the `#each` block:
 
@@ -1754,6 +1772,8 @@ Sometimes you just want to create an arbitrary amount of items like a grid, so y
 </style>
 ```
 
+### Asynchronous Data Loading
+
 In a previous example, we fetched some Pokemon data inside of an effect. That approach works, but we haven't handled any of the the error and success states which quickly becomes a mess.
 
 Thankfully, Svelte has a built-in solution for async data loading using the `#await` block:
@@ -1777,6 +1797,8 @@ Thankfully, Svelte has a built-in solution for async data loading using the `#aw
 	<p>{error.message}</p>
 {/await}
 ```
+
+### Asynchronous Svelte Aside
 
 TODO: update this with recent changes in mind
 
@@ -1816,6 +1838,24 @@ At the moment you have to create a [boundary](https://svelte.dev/docs/svelte/sve
 		<img src={(await pokemon).image} alt={(await pokemon).name} />
 	{/if}
 </svelte:boundary>
+```
+
+### Recreating Elements
+
+You can use the `key` block to recreate elements when state updates. This is useful for replaying transitions, which we're going to learn about later:
+
+```svelte:App.svelte {4,7-9}
+<script lang="ts">
+	import { fade } from 'svelte/transition'
+
+	let value = $state(0)
+</script>
+
+{#key value}
+	<div in:fade>👻</div>
+{/key}
+
+<button onclick={() => value++}>Spook</button>
 ```
 
 ## Listening To Events
@@ -1961,28 +2001,36 @@ One of the more useful bindings is `bind:this` to get a reference to a DOM node 
 <canvas bind:this={canvas}></canvas>
 ```
 
-Another useful thing to know about are **function bindings** when you need to do something with a value when it changes. This works by passing `bind:property={get, set}`, where `get` and `set` are functions:
+Another useful thing to know about are **function bindings** if you need to validate some data or link values. This works by passing `bind:property={get, set}`, where `get` and `set` are functions:
+
+https://svelte.dev/playground/hello-world#H4sIAAAAAAAAA3WOwWrDMBBEf2VZCrHAOHdhB0ovOfiaU52DYm1AoEpCWtsNRv9eLHBDS3udeW92V3Tqg1Dimaz1sPhoNVSkDZMWWOPdWEoo31fkR9i4LcB6t15DaNJMlrfsphL9lY_eMTlOKLFNYzSBT4Mb2BLDrOxE0MFLYsVUHc7U9_4g9noKgeKoUkE0RTOTrorTsL_sZSXE4Nrjc9q1xoWJ4WaclgXv1m2yEtCd4If_Vvy6tPOzhg7mhn3vlx3JgzuW7bUA-Z8z3x9n-IVjjUyfjJLjRPlaIytjF-M0yruyifIXJSpm14sBAAA=
 
 ```svelte:App.svelte
 <script>
 	let celsius = $state(0)
-	let fahrenheit = $state(32)
+	let fahrenheit = $state(0)
+
+	function celsiusToFahrenheit(v) {
+		celsius = v
+		fahrenheit = (v * 9/5 + 32).toFixed()
+	}
+
+	function fahrenheitToCelsius(v) {
+		fahrenheit = v
+		celsius = ((fahrenheit - 32) * 5/9).toFixed()
+	}
+
+	celsiusToFahrenheit(celsius)
 </script>
 
 <input bind:value={
 	() => celsius,
-	(v) => {
-		celsius = v
-		fahrenheit = (celsius * 9/5 + 32).toFixed()
-	}
+	(v) => celsiusToFahrenheit(v)
 } />
 
 <input bind:value={
 	() => fahrenheit,
-	(v) => {
-		fahrenheit = v
-		celsius = ((fahrenheit - 32) * 5/9).toFixed()
-	}
+	(v) => fahrenheitToCelsius(v)
 } />
 ```
 
@@ -3170,7 +3218,7 @@ If you want to update the `Tween` or `Spring` value when a reactive value change
 </script>
 ```
 
-## Integrating Third Party Libraries
+## Using Third Party Libraries
 
 If a specific Svelte package isn't available, you have the entire JavaScript ecosystem at your fingertips. In this section, we're going to learn methods at your disposal you can use to integrate third party JavaScript libraries with Svelte.
 
@@ -3418,9 +3466,9 @@ Instead of the animation component, we can create an attachment function which c
 
 A cool idea would be to have different attachments like `{@attach tween.from(...)}` or `{@attach tween.to(...)}`. The fun comes from picking the API shape you want that works in harmony with Svelte.
 
-## Integrating Event-Based Systems
+## Using Reactivity With Events
 
-This is a more advanced topic, but I think it's useful to know whenever you're trying to make an external system reactive in Svelte.
+This is a more advanced topic, but I think it's useful to know whenever you're trying to make an external event-based system reactive in Svelte.
 
 An external event is any event you can subscribe to and listen for changes. For example, let's say I want to create a GSAP animation timeline that I can control with state.
 
@@ -3627,6 +3675,64 @@ This makes our code much simpler. We don't need extra state to keep track of the
 
 How it works is that `createSubscriber` uses an effect that watches a value that increments when `update` runs, and reruns subscribers while keeping track of the active effects.
 
-## Ecosystem
+Do you remember the counter example from before, when we talked about how you don't need effects and you can do side-effects inside event handlers?
+
+```ts:counter.svelte.ts
+export class Counter {
+	#first = true
+
+	constructor(initial: number) {
+		this.#count = $state(initial)
+	}
+
+	get count() {
+		if (this.#first) {
+			const savedCount = localStorage.getItem('count')
+			if (savedCount) this.#count = parseInt(savedCount)
+			this.#first = false
+		}
+		return this.#count
+	}
+
+	set count(v: number) {
+		localStorage.setItem('count', v.toString())
+		this.#count = v
+	}
+}
+```
+
+This can also be made simpler by using `createSubscriber`. You only have to listen for the `storage` event on the `window` and run `update` when it changes to notify subscribers, so you don't even need to use state:
+
+```ts.counter.svelte.ts {5,8-14,17-20,22-24}
+import { createSubscriber } from 'svelte/reactivity'
+import { on } from 'svelte/events'
+
+class Counter {
+	#subscribe
+
+	constructor(initial: number) {
+		this.#subscribe = createSubscriber((update) => {
+			if (!localStorage.getItem('count')) {
+				localStorage.setItem('count', initial.toString())
+			}
+			const off = on(window, 'storage', update)
+			return () => off()
+		})
+	}
+
+	get count() {
+		this.#subscribe()
+		return parseInt(localStorage.getItem('count') ?? '0')
+	}
+
+	set count(v: number) {
+		localStorage.setItem('count', v.toString())
+	}
+}
+```
+
+In this example, we also use the `on` event from Svelte rather than `addEventListener`, because it returns a cleanup function that removes the handler for convenience.
+
+## The Svelte Ecosystem
 
 ## Using Svelte With AI

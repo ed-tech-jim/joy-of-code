@@ -1931,9 +1931,13 @@ You can also prevent default behavior by using `e.preventDefault()`. This is use
 </form>
 ```
 
-## Data Binding
+## Using Data Bindings
 
-In this example we take the user input by listening to the `input` event and filter the list of items based on it:
+In JavaScript, it's common to listen for the user input on the `<input>` element through the `input` event and update a value using one-way data binding — which only updates the value from the UI — but what if you could keep the value and UI in sync?
+
+### Two-Way Data Binding
+
+Having to set `value={search}` and do `oninput={(e) => search = e.target.value}` on the `<input>` element to update `search` is mundane for something you do often:
 
 ```svelte:App.svelte {3,4,8,14}
 <script>
@@ -1943,7 +1947,7 @@ In this example we take the user input by listening to the `input` event and fil
 </script>
 
 <input
-	oninput={(e) => search = e.target.value}
+	oninput={(e) => search = (e.target as HTMLInputElement).value}
 	value={search}
 	type="search"
 />
@@ -1955,10 +1959,11 @@ In this example we take the user input by listening to the `input` event and fil
 </ul>
 ```
 
-This is a lot of boilerplate code for something that's so common in web development. Thankfully, Svelte supports two-way data binding using the `bind:` directive:
+Thankfully, Svelte supports two-way data binding using the `bind:` directive. If you update the value, it updates the input and if you update the input, it updates the value:
 
 ```svelte:App.svelte
 <input bind:value={search} type="search" />
+<!-- ... -->
 ```
 
 Svelte provides many two-way bindings, and some readonly bindings. There are input, group, files, media and more bindings you can find in the [Svelte documentation](https://svelte.dev/docs/svelte/bind):
@@ -2001,38 +2006,45 @@ One of the more useful bindings is `bind:this` to get a reference to a DOM node 
 <canvas bind:this={canvas}></canvas>
 ```
 
-Another useful thing to know about are **function bindings** if you need to validate some data or link values. This works by passing `bind:property={get, set}`, where `get` and `set` are functions:
+### Function Bindings
 
-https://svelte.dev/playground/hello-world#H4sIAAAAAAAAA3WOwWrDMBBEf2VZCrHAOHdhB0ovOfiaU52DYm1AoEpCWtsNRv9eLHBDS3udeW92V3Tqg1Dimaz1sPhoNVSkDZMWWOPdWEoo31fkR9i4LcB6t15DaNJMlrfsphL9lY_eMTlOKLFNYzSBT4Mb2BLDrOxE0MFLYsVUHc7U9_4g9noKgeKoUkE0RTOTrorTsL_sZSXE4Nrjc9q1xoWJ4WaclgXv1m2yEtCd4If_Vvy6tPOzhg7mhn3vlx3JgzuW7bUA-Z8z3x9n-IVjjUyfjJLjRPlaIytjF-M0yruyifIXJSpm14sBAAA=
+Another useful thing to know about are **function bindings** if you need to validate some input, or link one value to another.
+
+Let's say you want to make a [Mocking SpongeBob](https://knowyourmeme.com/memes/mocking-spongebob) case converter to transform the text as the user types:
 
 ```svelte:App.svelte
-<script>
-	let celsius = $state(0)
-	let fahrenheit = $state(0)
+<script lang="ts">
+	let text = $state('I love Svelte')
 
-	function celsiusToFahrenheit(v) {
-		celsius = v
-		fahrenheit = (v * 9/5 + 32).toFixed()
+	function toSpongeBobCase(text: string) {
+		return text
+			.split('')
+			.map((c) => (Math.random() > 0.5 ? c.toUpperCase() : c.toLowerCase()))
+			.join('')
 	}
-
-	function fahrenheitToCelsius(v) {
-		fahrenheit = v
-		celsius = ((fahrenheit - 32) * 5/9).toFixed()
-	}
-
-	celsiusToFahrenheit(celsius)
 </script>
 
-<input bind:value={
-	() => celsius,
-	(v) => celsiusToFahrenheit(v)
-} />
-
-<input bind:value={
-	() => fahrenheit,
-	(v) => fahrenheitToCelsius(v)
-} />
+<textarea
+	value={toSpongeBobCase(text)}
+	oninput={(e) => {
+		text = toSpongeBobCase((e.target as HTMLInputElement).value)
+	}}
+></textarea>
 ```
+
+This is a perfectly fine approach, but it could be simpler. Instead of passing an expression like `bind:value={expression}`, you can pass a function binding like `bind:property={get, set}` to have more control what happens when you read and write a value:
+
+```svelte:App.svelte
+<!-- ... -->
+<textarea
+	bind:value={
+		() => toSpongeBobCase(text),
+		(v: string) => text = toSpongeBobCase(v)
+	}
+></textarea>
+```
+
+### Component Bindings
 
 ## Svelte Components
 

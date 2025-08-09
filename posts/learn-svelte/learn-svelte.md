@@ -168,15 +168,15 @@ Later we're going to learn about logic blocks like `if` and `each` to conditiona
 Tags with lowercase names are treated like regular HTML elements by Svelte and accept normal attributes:
 
 ```svelte:App.svelte
-<img src="image.gif" alt="Man dancing" />
+<img src="dance.gif" alt="Person dancing" />
 ```
 
 You can pass values to attributes using curly braces:
 
 ```svelte:App.svelte
 <script lang="ts">
-	let src = 'image.gif'
-	let alt = 'Man dancing'
+	let src = 'dance.gif'
+	let alt = 'Person dancing'
 </script>
 
 <img src={src} alt={alt} />
@@ -196,8 +196,8 @@ Attributes can have expressions inside the curly braces:
 
 ```svelte:App.svelte
 <script lang="ts">
-	let src = 'image.gif'
-	let alt = 'Man dancing'
+	let src = 'dance.gif'
+	let alt = 'Person dancing'
 	let lazy = true
 </script>
 
@@ -208,8 +208,8 @@ If you want to conditionally render attributes, don't use `&&` for short-circuit
 
 ```svelte:App.svelte
 <script lang="ts">
-	let src = 'image.gif'
-	let alt = 'Man dancing'
+	let src = 'dance.gif'
+	let alt = 'Person dancing'
 	let lazy = false
 </script>
 
@@ -227,8 +227,8 @@ You can spread attributes on elements:
 ```svelte:App.svelte
 <script lang="ts">
 	let obj = {
-		src: 'image.gif',
-		alt: 'Man dancing'
+		src: 'dance.gif',
+		alt: 'Person dancing'
 	}
 </script>
 
@@ -320,7 +320,7 @@ You can also define global styles in components. This is useful if you have cont
 
 Svelte has to "see" the styles in the component, so it doesn't know they exist and warns you about removing unusued styles:
 
-```svelte:App.svelte {14-15,17-18}
+```svelte:App.svelte {15-17,20-22}
 <script lang="ts">
 	let content = `
 		<h1>Big Banana Exposed</h1>
@@ -335,23 +335,31 @@ Svelte has to "see" the styles in the component, so it doesn't know they exist a
 <style>
 	.content {
 		/* ⚠️ Unused CSS selector "h1" */
-		h1 { font-size: 48px; }
+		h1 {
+			font-size: 48px;
+		}
 
 		/* ⚠️ Unused CSS selector "p" */
-		p { font-size: 20px; }
+		p {
+			font-size: 20px;
+		}
 	}
 </style>
 ```
 
 In that case, you can make the styles global by using the `:global(selector)` modifier:
 
-```svelte:App.svelte {4,6}
+```svelte:App.svelte {4-6,8-10}
 <!-- ... -->
 <style>
 	.content {
-		:global(h1) { font-size: 48px; }
+		:global(h1) {
+			font-size: 48px;
+		}
 
-		:global(p) { font-size: 20px; }
+		:global(p) {
+			font-size: 20px;
+		}
 	}
 </style>
 ```
@@ -363,9 +371,13 @@ Having to use `:global` on every selector is tedious! Thankfully, you can nest g
 <style>
 	:global {
 		.prose {
-			h1 { font-size: 48px; }
+			h1 {
+				font-size: 48px;
+			}
 
-			p { font-size: 20px; }
+			p {
+				font-size: 20px;
+			}
 		}
 	}
 </style>
@@ -377,9 +389,13 @@ You can also have "global scoped styles" where the styles inside the `:global` b
 <!-- ... -->
 <style>
 	.prose :global {
-		h1 { font-size: 48px; }
+		h1 {
+			font-size: 48px;
+		}
 
-		p { font-size: 20px; }
+		p {
+			font-size: 20px;
+		}
 	}
 </style>
 ```
@@ -388,9 +404,13 @@ Here's the compiled CSS output:
 
 ```css:output
 .prose.svelte-ju1yn8 {
-	h1 { font-size: 48px; }
+	h1 {
+		font-size: 48px;
+	}
 
-	p {	font-size: 20px; }
+	p {
+		font-size: 20px;
+	}
 }
 ```
 
@@ -567,7 +587,7 @@ For example, changing `editor.content` is going to update the UI in every place 
 
 You might not want deeply reactive state where pushing to an array or updating the object would cause an update. In that case, you can use `$state.raw` so state only updates when you reassign it:
 
-```svelte:App.svelte {2-6,12-13,15-19}
+```svelte:App.svelte {3-6,13,16-19}
 <script lang="ts">
 	// this could be a complex object
 	let editor = $state.raw({
@@ -617,7 +637,7 @@ function saveEditorState(editor) {
 
 You should also be aware that destructuring state loses reactivity because it's just JavaScript, so the values are evaluated when you destructure them:
 
-```svelte:App.svelte {7-8}
+```svelte:App.svelte {8}
 <script lang="ts">
 	let editor = $state({
 		theme: 'dark',
@@ -654,7 +674,7 @@ Derived values **only run when they're read** and are **lazy evaluted** which me
 
 Even if `max` depends on `count`, it only updates when `max` updates instead of `count`:
 
-```svelte:App.svelte {3,5-6,9}
+```svelte:App.svelte {3,6,9}
 <script lang="ts">
 	let count = $state(0)
 	let max = $derived(count >= 4)
@@ -694,14 +714,14 @@ This might sound like magic, but the only magic here is the system of signals an
 The reason you don't have to pass state to the function — unless you want to be explicit — is because signals only care where they're read, as highlighted in the compiled output:
 
 ```ts:output {5,9}
-// a) not passing state
+// not passing state
 let disabled = derived(limit)
 
 function limit() {
 	return get(count) > 4 // 📖
 }
 
-// b) passing state
+// passing state
 let disabled = derived(() => limit(get(count))) // 📖
 
 function limit(count) {
@@ -731,7 +751,7 @@ The `$derived` rune only accepts an expression by default, but you can use the `
 
 Svelte recommends you keep deriveds free of side-effects. You can't update state inside of deriveds to protect you from unintended side-effects:
 
-```svelte:App.svelte
+```svelte:App.svelte {5}
 <script lang="ts">
 	let count = $state(0)
 	let double = $derived.by(() => {
@@ -743,7 +763,7 @@ Svelte recommends you keep deriveds free of side-effects. You can't update state
 
 Going back to a previous example, you can also use derived state to keep reactivity when using destructuring:
 
-```svelte:App.svelte {7-8,10-11}
+```svelte:App.svelte {8,11}
 <script lang="ts">
 	let editor = $state({
 		theme: 'dark',
@@ -766,7 +786,7 @@ The last main rune you should know about is the `$effect` rune.
 
 Effects are functions that run when the component is added to the DOM and when their dependencies change. State that is **read** inside of an effect will be tracked:
 
-```svelte:App.svelte {2,5-6}
+```svelte:App.svelte {2,6}
 <script lang="ts">
 	let count = $state(0)
 
@@ -803,7 +823,7 @@ Effects are functions that run when the component is added to the DOM and when t
 
 Svelte provides an `untrack` function if you don't want to track the state:
 
-```svelte:App.svelte {2,8-9}
+```svelte:App.svelte {2,9}
 <script lang="ts">
 	import { untrack } from 'svelte'
 
@@ -822,7 +842,7 @@ Svelte provides an `untrack` function if you don't want to track the state:
 
 You can return a function from the effect callback, which reruns when the effect **dependencies change**, or when the component is **removed** from the DOM:
 
-```svelte:App.svelte {8-9}
+```svelte:App.svelte {9}
 <script lang="ts">
 	let count = $state(0)
 	let delay = $state(1000)
@@ -846,7 +866,7 @@ You can return a function from the effect callback, which reruns when the effect
 
 When it comes to deeply reactive state, effects only rerun when the object it reads changes and not its properties:
 
-```svelte:App.svelte {5-6,10-11}
+```svelte:App.svelte {6,11}
 <script lang="ts">
 	let obj = $state({ current: 0 })
 
@@ -866,30 +886,30 @@ There are ways around it though! 🤫
 
 You can use `JSON.stringify`, `$state.snapshot`, or the `$inspect` rune to react when the object properties change. The `save` function could be some external API used to save the data:
 
-```svelte:App.svelte {5-6,10-11,15-16}
+```svelte:App.svelte {5,10,15}
 <script lang="ts">
 	let obj = $state({ current: 0 })
 
 	$effect(() => {
-		JSON.stringify(obj)
-		save(obj) // 👍️
+		JSON.stringify(obj) // 👍️ tracked
+		save(obj)
 	})
 
 	$effect(() => {
-		$state.snapshot(obj)
-		save(obj) // 👍️
+		$state.snapshot(obj) // 👍️ tracked
+		save(obj)
 	})
 
 	$effect(() => {
-		$inspect(obj)
-		save(obj) // 👍️
+		$inspect(obj) // 👍️ tracked
+		save(obj)
 	})
 </script>
 ```
 
 **Don't use effects to synchronize state**. Svelte queues your effects and runs them last. Using effects to synchronize state can cause unexpected behaviors like state being out of sync:
 
-```svelte:App.svelte {6-7,12-13}
+```svelte:App.svelte {7,12-13}
 <script lang="ts">
 	let count = $state(0)
 	let double = $state(0)
@@ -930,7 +950,7 @@ You can use `JSON.stringify`, `$state.snapshot`, or the `$inspect` rune to react
 
 **Effects should be a last resort** when you have to synchronize with an external system that doesn't understand Svelte's reactivity. You should only use them for side-effects like fetching data from an API, or working with the DOM directly:
 
-```svelte:App.svelte
+```svelte:App.svelte {17-21}
 <script lang="ts">
 	import { getAbortSignal } from 'svelte'
 
@@ -938,7 +958,8 @@ You can use `JSON.stringify`, `$state.snapshot`, or the `$inspect` rune to react
 	let image = $state('')
 
 	async function getPokemon(pokemon: string) {
-		const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${pokemon}`, {
+		const baseUrl = 'https://pokeapi.co/api/v2/pokemon'
+		const response = await fetch(`${baseUrl}/${pokemon}`, {
 			// aborts when derived and effect reruns
 			signal: getAbortSignal()
 		})
@@ -953,11 +974,14 @@ You can use `JSON.stringify`, `$state.snapshot`, or the `$inspect` rune to react
 	})
 </script>
 
-<input oninput={e => pokemon = e.target.value} type="search" />
+<input
+	oninput={e => pokemon = (e.target as HTMLInputElement).value}
+	type="search"
+/>
 <img src={image} alt={pokemon} />
 ```
 
-If you want to do something **once** when the component is added, you can use the `onMount` lifecycle function instead of an effect:
+If you want to do something **once** when the component is added, you can use the `onMount` lifecycle function instead of an effect to do something when the component is addded (with an optional cleanup function):
 
 ```svelte:App.svelte
 <script lang="ts">
@@ -974,9 +998,13 @@ If you want to do something **once** when the component is added, you can use th
 	Avoid passing async callbacks to <code>onMount</code> and <code>$effect</code> as any cleanup function they have won't run. You can use async functions, or an <a href="https://developer.mozilla.org/en-US/docs/Glossary/IIFE" target="_blank">IIFE</a> inside them instead.
 </Card>
 
-Your effects run after the DOM updates in a [microtask](https://developer.mozilla.org/en-US/docs/Web/API/HTML_DOM_API/Microtask_guide), but sometimes you might need to do work before the DOM updates like measuring an element, or scroll position. One great example is the [GSAP Flip plugin](https://gsap.com/docs/v3/Plugins/Flip/) for animating view changes when you update the DOM. It needs to measure the position, size, and rotation of the element before and after the DOM update. In that case, you can use the `$effect.pre` rune that runs before the DOM updates:
+Your effects run after the DOM updates in a [microtask](https://developer.mozilla.org/en-US/docs/Web/API/HTML_DOM_API/Microtask_guide), but sometimes you might need to do work before the DOM updates like measuring an element, or scroll position.
 
-```svelte:App.svelte
+A great example is the [GSAP Flip plugin](https://gsap.com/docs/v3/Plugins/Flip/) for animating view changes when you update the DOM. It needs to measure the position, size, and rotation of the element before and after the DOM update.
+
+In that case, you can use the `$effect.pre` rune which runs before the DOM updates:
+
+```svelte:App.svelte {10-20}
 <script lang="ts">
 	import { gsap } from 'gsap'
 	import { Flip } from 'gsap/Flip'
@@ -989,10 +1017,8 @@ Your effects run after the DOM updates in a [microtask](https://developer.mozill
 	$effect.pre(() => {
 		// track `items` as a dependency
 		items
-
 		// record the element state before the DOM updates
 		const state = Flip.getState('.item')
-
 		// wait after the DOM updates
 		tick().then(() => {
 			// do the FLIP animation
@@ -1041,9 +1067,11 @@ Your effects run after the DOM updates in a [microtask](https://developer.mozill
 </style>
 ```
 
+`tick` is a useful lifecyle function that schedules a task to run in the next microtask when all the work is done, and before the DOM updates.
+
 ## State In Functions And Classes
 
-Being able to reuse code you write is a staple of software development. So far, we only used state at the top-level of our components, but you can use state, deriveds, and effects inside functions and classes which can be used in your components.
+So far, we only used state at the top-level of our components, but you can use state, deriveds, and effects inside functions and classes which can be used in your components.
 
 If those functions and classes are declared inside of a file, you have to use the `.svelte.js` or `.svelte.ts` extension to tell Svelte that it's a special file and doesn't have to check every file for runes.
 
@@ -1083,7 +1111,11 @@ Here's how it's used inside of a Svelte component:
 <button onclick={counter.increment}>+</button>
 ```
 
-You're probably wondering what's the deal with the `get` and `set` functions? Those are called **getters and setters**, and they create **accessor properties** which let you define custom behavior when you read and write to a property using a cleaner syntax. You could use functions instead, but the syntax is not as nice:
+You're probably wondering what's the deal with the `get` and `set` functions?
+
+Those are called **getters and setters**, and they create **accessor properties** which let you define custom behavior when you read and write to a property using a cleaner syntax.
+
+They're just part of JavaScript, and you could use functions instead:
 
 ```ts:counter.svelte.ts {8-9}
 export function createCounter(initial: number) {
@@ -1101,41 +1133,35 @@ export function createCounter(initial: number) {
 }
 ```
 
-We could make the API nicer and return a tuple like `[count, setCount] = createCounter(0)`, but you still have to use functions everywhere:
+You could return a tuple `[count, setCount] = createCounter(0)` instead to make the API nicer using destructuring.
 
-```svelte:App.svelte {7-9}
+As you can see, the syntax is not as nice compared to using accessors, since you have to use functions everywhere:
+
+```svelte:App.svelte {8-10,13-15}
 <script lang="ts">
 	import { createCounter } from './counter.svelte'
 
 	const counter = createCounter(0)
 </script>
 
+<!-- using functions -->
 <button onclick={() => counter.setCurrent(counter.count() + 1)}>
 	{counter.count()}
 </button>
-```
 
-Let's compare this to using accessors:
-
-```svelte:App.svelte {7-9}
-<script lang="ts">
-	import { createCounter } from './counter.svelte'
-
-	const counter = createCounter(0)
-</script>
-
+<!-- using accessors -->
 <button onclick={() => counter.count++}>
 	{counter.count}
 </button>
 ```
 
-That syntax looks a lot nicer! 😄 You might be wondering, can't you just return state from the function?
+The accessor syntax looks a lot nicer! 😄 You might be wondering, can't you just return state from the function?
 
 ```ts:counter.svelte.ts
 export function createCounter(initial: number) {
 	let count = $state(initial)
 	// ⛔️ this doesn't work
-	return { count }
+	return count
 }
 ```
 
@@ -1151,7 +1177,7 @@ export function createCounter(initial: number) {
 
 You could create a "magic" reactive container yourself like some signal-based frameworks do for you:
 
-```ts:counter.svelte.ts {1-5,8-9}
+```ts:counter.svelte.ts {2-5,9}
 // this could be a personal utility
 export function reactive<T>(initial: T) {
 	let value = $state<{ current: T }>({ current: initial })
@@ -1185,11 +1211,11 @@ Even destructuring works, since `count` is not just a regular value:
 
 That seems super useful...so why doesn't Svelte provide this utility?
 
-It's mostly because you can write one yourself in a couple of lines of code, but there's another reason. The reason Svelte doesn't provide such a utility is because you're encouraged to use classes, which give you certain benefits when using state inside of them.
+It's mostly because you can write one yourself in a couple of lines of code, but another reason is classes. If you use state inside classes, you get extra benefits which you can't get using functions.
 
-Any class fields declared with state are turned into private fields with matching `get`/`set` methods by Svelte for convenience, unless you declare them yourself:
+Svelte turns any class fields declared with state into private fields with matching `get`/`set` methods, unless you declare them yourself:
 
-```ts:counter.svelte.ts {3-4}
+```ts:counter.svelte.ts {4}
 export class Counter {
 	constructor(initial: number) {
 		// turned into `get` and `set` methods
@@ -1216,7 +1242,7 @@ class Counter {
 }
 ```
 
-There's only one gotcha with classes. Using methods like `counter.increment` inside `onclick` doesn't work, because `this` refers to the context where it ran and that's the button:
+There's only one gotcha with classes. Using methods like `counter.increment` inside `onclick` doesn't work, because `this` refers to the context where it ran, and here that's the `<button>` element:
 
 ```svelte:App.svelte
 <script lang="ts">
@@ -1248,7 +1274,7 @@ export class Counter {
 }
 ```
 
-Now that you understand how state is a regular value, it also makes sense you can't pass it to a function or class and expect it to be reactive.
+Now that you understand how state is a regular value, it also makes sense why you can't pass it to a function, or a class and expect it to be reactive.
 
 In this example, we pass `count` to a `Doubler` class in hopes that it will double the value when `count` updates. However, it **doesn't** work because `count` is a regular value when it's evaluated:
 
@@ -1261,7 +1287,7 @@ In this example, we pass `count` to a `Doubler` class in hopes that it will doub
 	}
 
 	let count = $state(0)
-	const double = new Doubler(count)
+	const double = new Doubler(count) // 0
 </script>
 
 <button onclick={() => count++}>
@@ -1359,7 +1385,7 @@ class Config {
 export const config = new Config()
 ```
 
-Knowing how state works is important to understand how Svelte works. It doesn't matter if you prefer functions or classes. As long as you understand how state works, you can bend it to your will.
+It doesn't matter if you prefer functions or classes. As long as you understand how state works, you can bend it to your will.
 
 To understand it even more, let's learn how reactivity works in Svelte.
 
@@ -1444,7 +1470,7 @@ This is oversimplified, but it happens every update and that's why it's called *
 
 Deriveds are also effects! That's how they're able to track dependencies. You can pass a function with state to a derived and it's tracked when it's read inside of an effect:
 
-```svelte:example {6-7,13-14}
+```svelte:example {7,14}
 <script lang="ts">
 	let value = $state('🍎')
 	let code = $derived(getCode())
@@ -1465,7 +1491,7 @@ I want to emphasize how `$state` is not some magic reactive container, but a reg
 
 If `emoji.code` was a regular value and not a getter, then `() => set_text(text, emoji.code)` would always return the same value, even though it reacts to the change:
 
-```svelte:example {4-6,14-15}
+```svelte:example {5-6,15}
 <script lang="ts">
 	class Emoji {
 		constructor(emoji: string) {
@@ -1487,11 +1513,11 @@ As the React people love to say, "it's just JavaScript!" 😄
 
 ## Why You Should Avoid Effects
 
-Effects aren't evil, but they're great footguns.
+Honestly, it's not the end of the world if you **sometimes** use effects when you shouldn't.
 
-You can easily overcomplicate your code by using effects, when you could just do a side-effect inside your event handler.
+The problem is that you can easily overcomplicate your code with effects, when you could just do a side-effect inside an event handler.
 
-Let's say you have a `counter` value that you want to read and write to `localStorage`. That's a side-effect, so of course you might use an effect:
+In this example, I have a `counter` value that I want to read and write to `localStorage`. That's a side-effect, so using an effect makes sense:
 
 ```ts:counter.svelte.ts
 class Counter {
@@ -1510,22 +1536,24 @@ class Counter {
 }
 ```
 
-There's nothing wrong with this approach, but it's not ideal. Let's say you want to create a counter inside `counter.svelte.ts` to be shared with others:
+There's nothing wrong with this approach. The problem arises if you want to create your favorite counter inside `counter.svelte.ts` to share it with the world:
 
 ```ts:counter.svelte.ts
 // ...
 export const counter = new Counter(10)
 ```
 
-Oops! There's an error:
+Oops! Immediately, there's an error:
 
 > effect_orphan `$effect` can only be used inside an effect (e.g. during component initialisation)
 
-In the previous section we learned that everything starts with a root component, so Svelte can run the teardown logic for effects when the component is removed. In this case, you're trying to create an effect outside that root effect which is not allowed.
+In the previous section we learned that everything starts with a root effect, so Svelte can run the teardown logic for nested effects when the component is removed.
 
-Svelte provides an advanced `$effect.root` to create your own root effect, but then you have to run the cleanup manually:
+In this case, you're trying to create an effect outside that root effect, which is not allowed.
 
-```ts:counter.svelte.ts {2,7-19,22-24}
+Svelte provides an advanced `$effect.root` to create your own root effect, but now you have to run the cleanup manually:
+
+```ts:counter.svelte.ts
 class Counter {
 	#cleanup
 
@@ -1553,9 +1581,9 @@ class Counter {
 }
 ```
 
-There's also an `$effect.tracking` rune if you only want the effect to run in a **tracking context** like the effect in your template:
+Then you learn about the `$effect.tracking` rune to know if you're inside a **tracking context** like the effect in your template, so maybe that's it:
 
-```ts:counter.svelte.ts {5,14}
+```ts:counter.svelte.ts
 class Counter {
 	constructor(initial: number) {
 		this.count = $state(initial)
@@ -1574,7 +1602,9 @@ class Counter {
 }
 ```
 
-But there's **another** problem! The effect is never going to run when the counter is created because you're not inside a tracking context. 😩 Alright...how about we move the effects to where you read and write the value inside of a tracking context like the template effect:
+But there's **another** problem! The effect is never going to run when the counter is created because you're not inside a tracking context. 😩
+
+Alright...how about we move the effects to where you read and write the value, inside of a tracking context like the template effect:
 
 ```ts:counter.svelte.ts {7-12,17}
 export class Counter {
@@ -1599,7 +1629,7 @@ export class Counter {
 }
 ```
 
-I don't take pleasure in this, but there's **one more** problem. Each time we read the value, we're creating an effect! 😱 Alright, that's a simple fix. We can use a variable to track if we already ran the effect:
+There's **one more** problem though. Each time we read the value, we're creating an effect! 😱 Alright, that's a simple fix. We can use a variable to track if we already ran the effect:
 
 ```ts:counter.svelte.ts {2,11,14}
 export class Counter {
@@ -1628,9 +1658,9 @@ export class Counter {
 }
 ```
 
-That works! 😄 I promise that's it. I know what you're thinking! **That's the point**. None of this is necessary. You can make everything simpler by avoiding effects and doing side-effects inside event handlers:
+Perfect! 😄 I know what you're thinking. **That's the point**. None of this is necessary. You can make everything simpler by **avoiding effects** and doing side-effects inside event handlers:
 
-```ts:counter.svelte.ts {2,9-13}
+```ts:counter.svelte.ts
 export class Counter {
 	#first = true
 
@@ -1654,19 +1684,6 @@ export class Counter {
 }
 ```
 
-You can also include a check if the component runs on the server:
-
-```ts:counter.svelte.ts {2}
-get count() {
-	if (typeof window !== 'undefined' && this.#first) {
-		const savedCount = localStorage.getItem('count')
-		if (savedCount) this.#count = parseInt(savedCount)
-		this.#first = false
-	}
-	return this.#count
-}
-```
-
 Now you can share your favorite counter with the world and you won't have any problems, unless it's a skill issue:
 
 ```svelte:App.svelte
@@ -1678,6 +1695,8 @@ Now you can share your favorite counter with the world and you won't have any pr
 	{counter.count}
 </button>
 ```
+
+If you catch yourself using `$effect.root` or `$effect.tracking`, you're doing something wrong, unless you know what you're doing.
 
 ## Control Flow Blocks
 
@@ -1860,14 +1879,10 @@ You can use the `key` block to recreate elements when state updates. This is use
 
 ## Listening To Events
 
-TODO: bubbling
-
-Events in Svelte use the same naming convention as standard [JavaScript events](https://developer.mozilla.org/en-US/docs/Web/Events#event_listing).
-
 You can listen to DOM events by adding attributes that start with `on` to elements. In the case of a mouse click, you would add the `onclick` attribute to a `<button>`:
 
 ```svelte:App.svelte
-<script>
+<script lang="ts">
 	function onclick() {
 		console.log('clicked')
 	}
@@ -1886,7 +1901,7 @@ You can listen to DOM events by adding attributes that start with `on` to elemen
 You can spread events, since they're just attributes:
 
 ```svelte:App.svelte
-<script>
+<script lang="ts">
 	const events = {
 		onclick: () => console.log('clicked'),
 		ondblclick: () => console.log('double clicked')
@@ -1899,7 +1914,7 @@ You can spread events, since they're just attributes:
 Here's an example of using the `onmousemove` event to update the mouse position:
 
 ```svelte:App.svelte
-<script>
+<script lang="ts">
 	let mouse = $state({ x: 0, y: 0 })
 
 	function onmousemove(e) {
@@ -1915,13 +1930,13 @@ Here's an example of using the `onmousemove` event to update the mouse position:
 
 The `event` is automatically passed to the function, so you don't have to do `onmousemove={(e) => onmousemove(e)}`.
 
-You can also prevent default behavior by using `e.preventDefault()`. This is useful when you want to control a form with JavaScript and avoid a page reload:
+You can prevent the default behavior by using `e.preventDefault()`. This is useful for things like when you want to control a form with JavaScript and avoid a page reload:
 
 ```svelte:App.svelte
-<script>
+<script lang="ts">
 	function onsubmit(e) {
 		e.preventDefault()
-		// sign up to newsletter
+		// sign up to newsletter...
 	}
 </script>
 
@@ -2044,7 +2059,97 @@ This is a perfectly fine approach, but it could be simpler. Instead of passing a
 ></textarea>
 ```
 
+### Readonly Bindings
+
+Svelte provides a bunch of two-way bindings, and readonly bindings for different elements. I'm only going to demonstrate a couple of them, but you can find many more bindings in the [Svelte documentation for bind](https://svelte.dev/docs/svelte/bind).
+
+This includes media bindings for `<audio>`, `<video>`, and `<img>` elements:
+
+```svelte:App.svelte {3-5,9}
+<script lang="ts">
+	let clip = 'video.mp4'
+	let currentTime = $state(0)
+	let duration = $state(0)
+	let paused = $state(true)
+</script>
+
+<div class="container">
+	<video src={clip} bind:currentTime bind:duration bind:paused></video>
+
+	<div class="controls">
+		<button onclick={() => paused = !paused}>{paused ? 'Play' : 'Pause'}</button>
+		<span>{currentTime.toFixed()}/{duration.toFixed()}</span>
+		<input type="range" bind:value={currentTime} max={duration} />
+	</div>
+</div>
+
+<style>
+	.container {
+	  max-width: 600px;
+
+		video {
+			width: 100%;
+			border-radius: 0.5rem;
+		}
+
+		.controls {
+			display: flex;
+			gap: 0.5rem;
+
+			input[type="range"] {
+				flex-grow: 1;
+			}
+		}
+	}
+</style>
+```
+
+There are also readonly bindings for visible elements that use [ResizeObserver](https://developer.mozilla.org/en-US/docs/Web/API/ResizeObserver) to measure dimension changes:
+
+```svelte:App.svelte {2-3,6}
+<script lang="ts">
+	let width = $state()
+	let height = $state()
+</script>
+
+<div class="container" bind:clientWidth={width} bind:clientHeight={height}>
+	<div class="text" contenteditable>
+		Edit this text
+	</div>
+	<div class="size">{width} x {height}</div>
+</div>
+
+<style>
+	.container {
+		position: relative;
+		display: inline-block;
+		padding: 0.5rem;
+		border: 1px solid orangered;
+
+		.text {
+			font-size: 2rem;
+		}
+
+		.size {
+			position: absolute;
+			left: 50%;
+			bottom: 0px;
+			padding: 0.5rem;
+			translate: -50% 100%;
+			color: black;
+			background-color: orangered;
+			font-weight: 700;
+			white-space: pre;
+		}
+	}
+</style>
+```
+
+### Window And Document Bindings
+
 ### Component Bindings
+
+In the next section we're going to learn about components and how we can also bind the properties we pass to them, making the data flow from child to parent.
 
 ## Svelte Components
 
@@ -2756,7 +2861,7 @@ ctx.emoji.current
 ctx.emoji.current = '🍎'
 ```
 
-## Delightful User Interactions
+## Transitions And Animations
 
 In this section, I'm going to show you how you can use Svelte's built-in transitions and animations to create delightful user interactions.
 
@@ -3229,6 +3334,10 @@ If you want to update the `Tween` or `Spring` value when a reactive value change
 	Spring.of(() => value, options)
 </script>
 ```
+
+## Built-In Reactives
+
+Svelte provides reactive versions of built-in JavaScript objects like `Map`, `Set`, `Date`, and `URL`, including other reactive utilities.
 
 ## Using Third Party Libraries
 

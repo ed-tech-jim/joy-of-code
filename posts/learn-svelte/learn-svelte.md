@@ -1722,7 +1722,7 @@ There are no conditionals and loops in HTML, unless you're using a templating la
 In Svelte, you can use the `#if` block to conditionally render content:
 
 ```svelte:App.svelte
-<script>
+<script lang="ts">
 	type Status = 'loading' | 'success' | 'error'
 
 	let status = $state<Status>('loading')
@@ -1938,6 +1938,49 @@ You can use the `key` block to recreate elements when state updates. This is use
 {/key}
 
 <button onclick={() => value++}>Spook</button>
+```
+
+### Local Constants
+
+You can use the `@const` tag to define readonly local constants that are block-scoped in the Svelte template.
+
+Local constants can only be defined as a child of blocks like `if`, `else`, `await`, and `<Component />`.
+
+In this example, we can destructure `text` and `done` from the `todo` object while keeping the original reference:
+
+```svelte:App.svelte
+<ul>
+	{#each todos as todo}
+		{@const { text, done: checked } = todo}
+		<li>
+			<input {checked} type="checkbox" />
+			<span>{text}</span>
+		</li>
+	{/each}
+</ul>
+```
+
+In this example, we're creating a 8x8 grid of 64 squares using local constants to keep everything organized:
+
+```svelte:App.svelte
+<script lang="ts">
+	let size = 800
+	let tiles = 8
+</script>
+
+<svg width={size} height={size}>
+	{#each Array(tiles), col}
+		{#each Array(tiles), row}
+			{@const tile = size / tiles}
+			{@const x = col * tile}
+			{@const y = row * tile}
+			{@const width = tile}
+			{@const height = tile}
+			{@const fill = (col + row) % 2 === 0 ? 'orangered' : 'white'}
+			<rect {x} {y} {width} {height} {fill} />
+		{/each}
+	{/each}
+</svg>
 ```
 
 ## Listening To Events
@@ -2320,7 +2363,7 @@ To pass data from one component to another, we use properties, or props for shor
 <Button onclick={() => console.log('click')}>Click</Button>
 ```
 
-To receive the props in a child component, you use the `$props` rune. The `children` prop is used to render any content inside the component tags using the `@render` tag:
+To receive the props in a child component, you use the `$props` rune. Every component has a `children` prop to render any content inside the component tags using the `@render` tag:
 
 ```svelte:Button.svelte {6-7}
 <script lang="ts">
@@ -2334,15 +2377,15 @@ To receive the props in a child component, you use the `$props` rune. The `child
 
 You can destructure props, set a default value, or rename them:
 
-```ts:Button.svelte {2}
+```ts:Button.svelte
 // using destructuring
 let { children, ...props } = $props()
 
-// setting a default value
-let {	children,	disabled: true, ...props } = $props()
+// setting default values
+let {	disabled = true, ...props } = $props()
 
-// renaming the value
-let { children: offspring } = $props()
+// renaming values
+let { children: offspring, ...props } = $props()
 ```
 
 First we'll create the component that handles adding a new todo. To receive the props, we use the `$props` rune. Here we bind the input value to the `todo` variable in the parent component, so we have to let Svelte know it's okay for the child to mutate the parent state by using the `$bindable` rune:

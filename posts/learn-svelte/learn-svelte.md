@@ -328,12 +328,12 @@ Svelte has to "see" the styles in the component, so it doesn't know they exist a
 	`
 </script>
 
-<div class="content">
+<article>
 	{@html content}
-</div>
+</article>
 
 <style>
-	.content {
+	article {
 		/* ⚠️ Unused CSS selector "h1" */
 		h1 {
 			font-size: 48px;
@@ -347,12 +347,16 @@ Svelte has to "see" the styles in the component, so it doesn't know they exist a
 </style>
 ```
 
+<Card type="danger">
+	The <code>@html</code> tag is used to render raw HTML in Svelte components. If you don't control the content, always sanitize user input to prevent <a href="https://owasp.org/www-community/attacks/xss/" target="_blank">XSS attacks</a>.
+</Card>
+
 In that case, you can make the styles global by using the `:global(selector)` modifier:
 
 ```svelte:App.svelte {4-6,8-10}
 <!-- ... -->
 <style>
-	.content {
+	article {
 		:global(h1) {
 			font-size: 48px;
 		}
@@ -370,7 +374,7 @@ Having to use `:global` on every selector is tedious! Thankfully, you can nest g
 <!-- ... -->
 <style>
 	:global {
-		.prose {
+		article {
 			h1 {
 				font-size: 48px;
 			}
@@ -388,7 +392,7 @@ You can also have "global scoped styles" where the styles inside the `:global` b
 ```svelte:App.svelte {3}
 <!-- ... -->
 <style>
-	.prose :global {
+	article :global {
 		h1 {
 			font-size: 48px;
 		}
@@ -403,7 +407,7 @@ You can also have "global scoped styles" where the styles inside the `:global` b
 Here's the compiled CSS output:
 
 ```css:output
-.prose.svelte-ju1yn8 {
+article.svelte-ju1yn8 {
 	h1 {
 		font-size: 48px;
 	}
@@ -412,6 +416,16 @@ Here's the compiled CSS output:
 		font-size: 20px;
 	}
 }
+```
+
+Keyframe animations are also scoped to the component. If you want to make them global, you have to prepend the keyframe name with `-global-`. The `-global-` part is removed when compiled, so you can reference the keyframe name in your app:
+
+```svelte:App.svelte
+<style>
+	@keyframes -global-animation {
+		/* ... */
+	}
+</style>
 ```
 
 You can use different [preprocessors](https://svelte.dev/docs/kit/integrations#vitePreprocess) like [PostCSS](https://postcss.org/) or [SCSS](https://sass-lang.com/) by simply adding the `lang` attribute to the `<style>` tag with the preprocessor you want to use:
@@ -975,8 +989,9 @@ You can use `JSON.stringify`, `$state.snapshot`, or the `$inspect` rune to react
 </script>
 
 <input
-	oninput={e => pokemon = (e.target as HTMLInputElement).value}
 	type="search"
+	placeholder="Enter Pokemon name"
+	oninput={e => pokemon = (e.target as HTMLInputElement).value}
 />
 <img src={image} alt={pokemon} />
 ```
@@ -1708,17 +1723,19 @@ In Svelte, you can use the `#if` block to conditionally render content:
 
 ```svelte:App.svelte
 <script>
-	let user = $state({ authed: false })
+	type Status = 'loading' | 'success' | 'error'
 
-	function toggle() {
-		user.authed = !user.authed
-	}
+	let status = $state<Status>('loading')
 </script>
 
-{#if user.authed}
-  <button onclick={toggle}>Log out</button>
+{#if status === 'loading'}
+	<p>Loading...</p>
+{:else if status === 'success'}
+	<p>Success!</p>
+{:else if status === 'error'}
+	<p>Error</p>
 {:else}
-	<button onclick={toggle}>Log in</button>
+	<p>Impossible state</p>
 {/if}
 ```
 
@@ -1791,6 +1808,44 @@ Sometimes you just want to create an arbitrary amount of items like a grid, so y
 </style>
 ```
 
+You can loop over any iterable that works with `Array.from` from a `Map` and `Set` object to generators:
+
+```svelte:App.svelte
+<script lang="ts">
+	let itemsMap = new Map([
+		['🍎', 'apple'],
+		['🍌', 'banana'],
+	])
+
+	let itemsSet = new Set(['🍎', '🍌'])
+
+	function* itemsGenerator() {
+		yield '🍎'
+		yield '🍌'
+	}
+</script>
+
+<ul>
+	{#each itemsMap as [key, value]}
+		<li>{key}: {value}</li>
+	{/each}
+</ul>
+
+<ul>
+	{#each itemsSet as item}
+		<li>{item}</li>
+	{/each}
+</ul>
+
+<ul>
+	{#each itemsGenerator() as item}
+		<li>{item}</li>
+	{/each}
+</ul>
+```
+
+Svelte even has reactive versions of built-in JavaScript objects, which we're going to learn about later.
+
 ### Asynchronous Data Loading
 
 In a previous example, we fetched some Pokemon data inside of an effect. That approach works, but we haven't handled any of the the error and success states which quickly becomes a mess.
@@ -1800,7 +1855,8 @@ Thankfully, Svelte has a built-in solution for async data loading using the `#aw
 ```svelte:App.svelte
 <script lang="ts">
 	async function getPokemon(pokemon: string) {
-		let response = await fetch(`https://pokeapi.co/api/v2/pokemon/${pokemon}`)
+		const baseUrl = 'https://pokeapi.co/api/v2/pokemon'
+		const response = await fetch(`${baseUrl}/${pokemon}`)
 		if (!response.ok) throw new Error('💣️ oops!')
 		let { name, sprites } = await response.json()
 		return { name, image: sprites['front_default'] }
@@ -1817,9 +1873,16 @@ Thankfully, Svelte has a built-in solution for async data loading using the `#aw
 {/await}
 ```
 
-### Asynchronous Svelte Aside
+You can omit the `catch` block if you don't care about errors, and the initial block if you only care about the result:
 
-TODO: update this with recent changes in mind
+```svelte:App.svelte
+{#await getPokemon('charizard') then pokemon}
+	<p>{pokemon.name}</p>
+	<img src={pokemon.image} alt={pokemon.name} />
+{/await}
+```
+
+### Asynchronous Svelte Aside
 
 In the near future, you're going to be able to `await` a promise directly in a Svelte component. You can try it today by enabling the [experimental async flag](https://github.com/sveltejs/svelte/discussions/15845) in your Svelte config:
 
@@ -1837,7 +1900,7 @@ At the moment you have to create a [boundary](https://svelte.dev/docs/svelte/sve
 
 ```svelte:App.svelte
 <script lang="ts">
-	import { getPokemon } from './api.ts'
+	import { getPokemon } from './pokemon.ts'
 
 	// you could `await` the data here if the boundary was declared higher up
 	let pokemon = getPokemon('charizard')
@@ -2246,7 +2309,43 @@ todos/
 
 The way Svelte knows something is a component is by a capitalized tag such as `<Component>`, or dot notation like `<my.component>`. How you name the file is irrelevant. Most often you're going to see the PascalCase naming convention, so that's what I'm going to use. Personally, I prefer kebab-case.
 
-First we'll create the component that handles adding a new todo. To receive and destructure props we use the `$props` rune. Here we bind the input value to the `todo` variable in the parent component, so we have to let Svelte know it's okay for the child to mutate the parent state by using the `$bindable` rune:
+To pass data from one component to another, we use properties, or props for short — similar to how you pass attributes to elements:
+
+```svelte:App.svelte
+<script lang="ts">
+	import Button from './Button.svelte'
+</script>
+
+<Button>Button</Button>
+<Button onclick={() => console.log('click')}>Click</Button>
+```
+
+To receive the props in a child component, you use the `$props` rune. The `children` prop is used to render any content inside the component tags using the `@render` tag:
+
+```svelte:Button.svelte {6-7}
+<script lang="ts">
+	let props = $props()
+</script>
+
+<button class={['base', props.class]} {...props}>
+	{@render props.children?.()}
+</button>
+```
+
+You can destructure props, set a default value, or rename them:
+
+```ts:Button.svelte {2}
+// using destructuring
+let { children, ...props } = $props()
+
+// setting a default value
+let {	children,	disabled: true, ...props } = $props()
+
+// renaming the value
+let { children: offspring } = $props()
+```
+
+First we'll create the component that handles adding a new todo. To receive the props, we use the `$props` rune. Here we bind the input value to the `todo` variable in the parent component, so we have to let Svelte know it's okay for the child to mutate the parent state by using the `$bindable` rune:
 
 ```svelte:AddTodo.svelte {2,6}
 <script>
@@ -2302,7 +2401,7 @@ In reality, you don't have to do this. I just wanted to demonstrate how to use t
 </form>
 ```
 
-I'm mostly using a form because you can just press enter to submit. Instead of binding the value, you can get the value from the form `onsubmit` event. Later in this section, I'm going to show you what to do instead.
+I'm using a form to submit a todo when you press enter for convenience. Instead of binding the value, you can get the value from the form `onsubmit` event. Later in this section, I'm going to show you a better approach.
 
 Let's create a component that renders the list of todos and spice it up with a built-in Svelte transition:
 
@@ -2505,11 +2604,13 @@ As a cherry on top, let's save the todos in local storage:
 </script>
 ```
 
-There are more ways to do this, but I'm going to leave it here for now. Later we're going to learn how to talk between components without props, using the context API.
+There's a better way to do this, but I'm going to leave it here for now. Later we're going to learn how to talk between components without props, using the context API.
 
 ## Component Composition
 
 You can compose components by nesting them, using snippets which hold content that can be passed as props to components similar to slots, and communicate between components with the context API without props or events.
+
+### Component Nesting
 
 To demonstrate how wonderful component composition is in Svelte, let's create an accordion component that can have many accordion items. You can create these files inside an `accordion` folder:
 
@@ -2623,6 +2724,8 @@ That's it! You can now use the `<Accordion>` component in your app. That being s
 
 That's not a way to live your life! Instead, you can use [inversion of control](https://en.wikipedia.org/wiki/Inversion_of_control) so the user can render the accordion item however they want.
 
+### Snippets
+
 Let's modify the `<AccordionItem>` component to accept an `accordionItem` snippet as a prop instead, and pass it the `open` state and `toggle` function so we have access to them inside the snippet:
 
 ```svelte:AccordionItem.svelte {2,10}
@@ -2692,6 +2795,10 @@ If you use a snippet inside the component, it implicitly becomes a prop on the c
 </Accordion>
 ```
 
+<Card type="info">
+ You can export snippets from <code>&lt;script module&gt;</code> if they don't reference any state in a <code>script</code> block, and use them in other components.
+</Card>
+
 This gives you complete control how the accordion item is rendered. I don't know about you, but that's really cool.
 
 Alright, but what if you're asked to add a feature to let the user control the open and closed state of the accordion items?
@@ -2716,7 +2823,13 @@ You might bind the `open` prop from the `<Accordion>` component and pass the pro
 </Accordion>
 ```
 
-How do we communicate this change from the `<Accordion>` component to its child components? You could "lift state up" and use props everywhere, or you could use the context API which was made to solve this problem. Under the hood, the context API is just a JavaScript [Map](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map) object that holds key-value pairs.
+How do we communicate this change from the `<Accordion>` component to its child components?
+
+### The Context API
+
+You could "lift state up" and use props everywhere, or you could use the context API which was made to solve this problem.
+
+Under the hood, the context API is just a JavaScript [Map](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map) object that holds key-value pairs.
 
 First you have to set the context in the parent component using `setContext` which accepts a key and a value:
 
@@ -2860,6 +2973,88 @@ const ctx = getContext('ctx')
 ctx.emoji.current
 ctx.emoji.current = '🍎'
 ```
+
+### Module Context
+
+There's one last trick you should know when it comes to component composition, and it's the `module` script block.
+
+So far, we learned to use the regular script block for component logic that's unique for every instance:
+
+```svelte:Counter.svelte {3}
+<script lang="ts">
+	// different for every instance
+	let uid = crypto.randomUUID()
+</script>
+
+<p>{uid}</p>
+```
+
+You can use the `module` script block to share code across component instances:
+
+```svelte:Counter.svelte {1,3}
+<script module lang="ts">
+	// same for every instance
+	let uid = crypto.randomUUID()
+</script>
+
+<p>{uid}</p>
+```
+
+<Card type="info">
+	If you need a unique identifier for a component instance, Svelte provides one through <code>$props.id</code>.
+</Card>
+
+You can also share state between instances:
+
+```svelte:Counter.svelte {6}
+<script module lang="ts">
+	// same for every instance
+	let uid = crypto.randomUUID()
+
+	// state
+	let count = $state(0)
+</script>
+
+<p>{uid}</p>
+<button onclick={() => count++}>{count}</button>
+```
+
+You can use this to control media playback across instances, or if you simply want to export some functions from the module:
+
+```svelte:Counter.svelte {9-11}
+<script module lang="ts">
+	// outputs different random number for every instance
+	let uid = crypto.randomUUID()
+
+	// state
+	let count = $state(0)
+
+	// export
+	export function reset() {
+		count = 0
+	}
+</script>
+
+<p>{uid}</p>
+<button onclick={() => count++}>{count}</button>
+```
+
+Give it a try!
+
+```svelte:App.svelte
+<script>
+	import Counter, { reset } from './Counter.svelte'
+</script>
+
+<Counter />
+<Counter />
+<Counter />
+<Counter />
+
+<button onclick={() => reset()}>Reset</button>
+```
+
+You can have a regular script block, and a `module` script block in your component.
 
 ## Transitions And Animations
 
@@ -3335,10 +3530,6 @@ If you want to update the `Tween` or `Spring` value when a reactive value change
 </script>
 ```
 
-## Built-In Reactives
-
-Svelte provides reactive versions of built-in JavaScript objects like `Map`, `Set`, `Date`, and `URL`, including other reactive utilities.
-
 ## Using Third Party Libraries
 
 If a specific Svelte package isn't available, you have the entire JavaScript ecosystem at your fingertips. In this section, we're going to learn methods at your disposal you can use to integrate third party JavaScript libraries with Svelte.
@@ -3587,7 +3778,92 @@ Instead of the animation component, we can create an attachment function which c
 
 A cool idea would be to have different attachments like `{@attach tween.from(...)}` or `{@attach tween.to(...)}`. The fun comes from picking the API shape you want that works in harmony with Svelte.
 
-## Using Reactivity With Events
+## Reactive Data Structures And Utilities
+
+Svelte has reactive versions of JavaScript built-in objects like `Map`, `Set`, `Date`, and `URL`.
+
+In this example, we use the reactive version of the built-in `Map` object in JavaScript to cache the pokemon data:
+
+```svelte:App.svelte {3,8,12,22}
+<script lang="ts">
+	import { getAbortSignal } from 'svelte'
+	import { SvelteMap } from 'svelte/reactivity'
+
+	let name = $state('')
+
+	// pokemon cache
+	const pokemon = new SvelteMap<string, unknown>()
+
+	async function getPokemon() {
+		// hits the cache
+		if (!name || pokemon.has(name)) return
+
+		const baseUrl = 'https://pokeapi.co/api/v2/pokemon'
+		const response = await fetch(`${baseUrl}/${name}`, {
+			signal: getAbortSignal()
+		})
+		if (!response.ok) throw new Error('💣️ oops!')
+		const data = await response.json()
+
+		// add to cache
+		pokemon.set(name, data)
+	}
+
+	$effect(() => {
+		getPokemon()
+	})
+</script>
+
+<div class="container">
+	<div class="actions">
+		<input type="search" bind:value={name} placeholder="Enter Pokemon name" />
+		<button onclick={() => pokemon.clear()}>🧹 Clear</button>
+	</div>
+
+	{#each pokemon as [name, details]}
+		<details>
+			<summary>{name}</summary>
+			<div class="details">
+				<pre>{JSON.stringify(details, null, 2)}</pre>
+			</div>
+		</details>
+	{/each}
+</div>
+
+<style>
+	.container {
+		width: 800px;
+		height: 600px;
+
+		.actions {
+			display: flex;
+			justify-content: center;
+			gap: 0.5rem;
+			margin-inline: auto;
+			margin-bottom: 2rem;
+
+			input {
+				padding: 1rem;
+			}
+		}
+
+		summary {
+			text-transform: capitalize;
+		}
+
+		.details {
+			max-height: 400px;
+			overflow: hidden scroll;
+		}
+	}
+</style>
+```
+
+There are even reactive utilities you can use such as `MediaQuery` and `prefersReducedMotion`. You can find more [reactive built-ins](https://svelte.dev/docs/svelte/svelte-reactivity) with examples in the Svelte documentation.
+
+Svelte even provides a convenient way to make external APIs reactive, which we're going to learn about in the next section.
+
+## Reactive Events
 
 This is a more advanced topic, but I think it's useful to know whenever you're trying to make an external event-based system reactive in Svelte.
 

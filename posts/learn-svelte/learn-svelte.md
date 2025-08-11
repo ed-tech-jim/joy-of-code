@@ -1738,13 +1738,13 @@ export class Counter {
 
 Unless you know what you're doing — if you catch yourself using advanced runes like `$effect.root` or `$effect.tracking`, you're doing something wrong.
 
-## Control Flow Blocks
+## Using Template Logic
 
-There are no conditionals and loops in HTML, unless you're using a templating language.
+HTML doesn't have conditionals or loops, but Svelte has control flow blocks ranging from `{#if ...}`, `{#each ...}` to data loading blocks like `{#await ...}`.
 
 ### Using Conditionals
 
-In Svelte, you can use the `#if` block to conditionally render content:
+In Svelte, you can use the `{#if ...}` block to conditionally render content:
 
 ```svelte:App.svelte
 <script lang="ts">
@@ -1766,15 +1766,15 @@ In Svelte, you can use the `#if` block to conditionally render content:
 
 ### Looping Over Data
 
-To loop over a list of items, you use the `#each` block:
+To loop over a list of items, you use the `{#each ...}` block:
 
 ```svelte:App.svelte
-<script>
+<script lang="ts">
 	let todos = $state([
-		{ id: 1, text: 'Todo 1', done: true },
+		{ id: 1, text: 'Todo 1', done: false },
 		{ id: 2, text: 'Todo 2', done: false },
 		{ id: 3, text: 'Todo 3', done: false },
-		{ id: 4, text: 'Todo 4', done: false },
+		{ id: 4, text: 'Todo 4', done: false }
 	])
 </script>
 
@@ -1790,50 +1790,46 @@ To loop over a list of items, you use the `#each` block:
 </ul>
 ```
 
-<Card type="info">
-	The <code>else</code> clause is optional.
-</Card>
-
 You can [destructure](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Destructuring_assignment) the items values you're iterating over, get the current item index and provide a key, so Svelte can keep track of changes:
 
 ```svelte:App.svelte {2}
 <ul>
-	{#each todos as { id, text, done }, index (id)}
+	{#each todos as { id, text, done }, i (id)}
 		<li>
 			<input checked={done} type="checkbox" />
-			<span>{text}</span>
+			<span style:color={i % 2 === 0 ? 'orangered' : ''}>{text}</span>
 		</li>
 	{/each}
 </ul>
 ```
 
-Sometimes you just want to create an arbitrary amount of items like a grid, so you can ignore the `as` part. Here's an example of a 10x10 grid:
+You can omit the `as` part inside the `{#each ...}` block if you just want to loop over an arbitrary amount of items like a grid:
 
 ```svelte:App.svelte
 <div class="grid">
-  {#each { length: 10 }, row}
-    {#each { length: 10 }, col}
-      <div class="cell">{row},{col}</div>
-    {/each}
-  {/each}
+	{#each Array(10), row}
+		{#each Array(10), col}
+			<div class="cell">{row},{col}</div>
+		{/each}
+	{/each}
 </div>
 
 <style>
-  .grid {
+	.grid {
 		max-width: 400px;
-    display: grid;
-    grid-template-columns: repeat(10, 1fr);
-    gap: 0.5rem;
-  }
+		display: grid;
+		grid-template-columns: repeat(10, 1fr);
+		gap: 0.5rem;
+	}
 
-  .cell {
-    padding: 1rem;
-    border: 1px solid #ccc;
-  }
+	.cell {
+		padding: 1rem;
+		border: 1px solid #ccc;
+	}
 </style>
 ```
 
-You can loop over any iterable that works with `Array.from` from a `Map` and `Set` object to generators:
+You can loop over any iterable that works with `Array.from` from a `Map` and `Set` object, to generators:
 
 ```svelte:App.svelte
 <script lang="ts">
@@ -1873,9 +1869,9 @@ Svelte even has reactive versions of built-in JavaScript objects, which we're go
 
 ### Asynchronous Data Loading
 
-In a previous example, we fetched some Pokemon data inside of an effect. That approach works, but we haven't handled any of the the error and success states which quickly becomes a mess.
+Previously, we fetched some pokemon data inside of an effect, but we haven't handled the loading, error, or success state.
 
-Thankfully, Svelte has a built-in solution for async data loading using the `#await` block:
+Svelte has an `{#await ...}` block for dealing with promises which handles loading, error, and success states:
 
 ```svelte:App.svelte
 <script lang="ts">
@@ -1921,14 +1917,11 @@ export default {
 }
 ```
 
-At the moment you have to create a [boundary](https://svelte.dev/docs/svelte/svelte-boundary) which you can put at the root of your app, or where you want to use the `await` keyword:
+At the moment you have to create a [boundary](https://svelte.dev/docs/svelte/svelte-boundary) at the root of your app, or where you want to use the `await` keyword:
 
 ```svelte:App.svelte
 <script lang="ts">
-	import { getPokemon } from './pokemon.ts'
-
-	// you could `await` the data here if the boundary was declared higher up
-	let pokemon = getPokemon('charizard')
+	let { children } = $props()
 </script>
 
 <svelte:boundary>
@@ -1937,19 +1930,41 @@ At the moment you have to create a [boundary](https://svelte.dev/docs/svelte/sve
 		<p>loading...</p>
 	{/snippet}
 
-	<!-- for loading new data -->
-	{#if $effect.pending()}
-		<p>loading...</p>
-	{:else}
-		<p>{(await pokemon).name}</p>
-		<img src={(await pokemon).image} alt={(await pokemon).name} />
-	{/if}
+	{@render children?.()}
 </svelte:boundary>
 ```
 
+Then inside of a component, you can use the `await` keyword in the script block, or template:
+
+```svelte:Pokemon.svelte {5}
+<script lang="ts">
+	// same Pokemon API as before
+	import { getPokemon } from './pokemon.ts'
+
+	let pokemon = await getPokemon('charizard')
+</script>
+
+<p>{pokemon.name}</p>
+<img src={pokemon.image} alt={pokemon.name} />
+```
+
+You can use the `$effect.pending` rune to show a loading state:
+
+```svelte:Pokemon.svelte
+<!-- shows when loading new data -->
+{#if $effect.pending()}
+	<p>loading...</p>
+{:else}
+	<p>{(await pokemon).name}</p>
+	<img src={(await pokemon).image} alt={(await pokemon).name} />
+{/if}
+```
+
+SvelteKit takes this even further with [remote functions](https://svelte.dev/docs/kit/remote-functions), where you can fetch data from a server by invoking a function on the client.
+
 ### Recreating Elements
 
-You can use the `key` block to recreate elements when state updates. This is useful for replaying transitions, which we're going to learn about later:
+You can use the `{#key ...}` block to recreate elements when state updates. This is useful for replaying transitions, which we're going to learn about later:
 
 ```svelte:App.svelte {4,7-9}
 <script lang="ts">
@@ -1967,13 +1982,13 @@ You can use the `key` block to recreate elements when state updates. This is use
 
 ### Local Constants
 
-You can use the `@const` tag to define readonly local constants that are block-scoped in the Svelte template.
+You can use the `@const` tag to define block-scoped readonly local constants in the Svelte template.
 
-Local constants can only be defined as a child of blocks like `if`, `else`, `await`, and `<Component />`.
+Local constants can only be defined as a child of blocks like `{#if ...}`, `{#else ...}`, `{#await ...}`, and `<Component />`.
 
 In this example, we can destructure `text` and `done` from the `todo` object while keeping the original reference:
 
-```svelte:App.svelte
+```svelte:App.svelte {3}
 <ul>
 	{#each todos as todo}
 		{@const { text, done: checked } = todo}
@@ -1985,7 +2000,7 @@ In this example, we can destructure `text` and `done` from the `todo` object whi
 </ul>
 ```
 
-In this example, we're creating a 8x8 grid of 64 squares using local constants to keep everything organized:
+In this example, we're creating a SVG grid of squares and using local constants keeps everything organized:
 
 ```svelte:App.svelte
 <script lang="ts">
@@ -2010,7 +2025,7 @@ In this example, we're creating a 8x8 grid of 64 squares using local constants t
 
 ## Listening To Events
 
-You can listen to DOM events by adding attributes that start with `on` to elements. In the case of a mouse click, you would add the `onclick` attribute to a `<button>`:
+You can listen to DOM events by adding attributes that start with `on` to elements. In the case of a mouse click, you would add the `onclick` attribute to a `<button>` element:
 
 ```svelte:App.svelte
 <script lang="ts">
@@ -2042,13 +2057,14 @@ You can spread events, since they're just attributes:
 <button {...events}>Click</button>
 ```
 
-Here's an example of using the `onmousemove` event to update the mouse position:
+This example uses the `onmousemove` event to update the mouse position:
 
 ```svelte:App.svelte
 <script lang="ts">
 	let mouse = $state({ x: 0, y: 0 })
 
-	function onmousemove(e) {
+	// the event is automatically passed
+	function onmousemove(e: MouseEvent) {
 		mouse.x = e.clientX
 		mouse.y = e.clientY
 	}
@@ -2057,45 +2073,52 @@ Here's an example of using the `onmousemove` event to update the mouse position:
 <div {onmousemove}>
 	The mouse position is {mouse.x} x {mouse.y}
 </div>
-```
 
-The `event` is automatically passed to the function, so you don't have to do `onmousemove={(e) => onmousemove(e)}`.
+<style>
+	div {
+		width: 100%;
+		height: 100%;
+	}
+</style>
+```
 
 You can prevent the default behavior by using `e.preventDefault()`. This is useful for things like when you want to control a form with JavaScript and avoid a page reload:
 
-```svelte:App.svelte
+```svelte:App.svelte {3}
 <script lang="ts">
-	function onsubmit(e) {
+	function onsubmit(e: SubmitEvent) {
 		e.preventDefault()
-		// sign up to newsletter...
+		const data = new FormData(this)
+		const email = data.get('email)
+		console.log(email)
 	}
 </script>
 
 <form {onsubmit}>
-	<input type="email" />
-	<button type="submit">Sign up</button>
+	<input type="email" name="email" />
+	<button type="submit">Subscribe</button>
 </form>
 ```
 
 ## Using Data Bindings
 
-In JavaScript, it's common to listen for the user input on the `<input>` element through the `input` event and update a value using one-way data binding — which only updates the value from the UI — but what if you could keep the value and UI in sync?
+In JavaScript, it's common to listen for the user input on the `<input>` element through the `input` event, and update a value. This is called one-way data binding since updating the value doesn't update the input. In Svelte, you can use the `bind:` directive to keep them in sync.
 
 ### Two-Way Data Binding
 
-Having to set `value={search}` and do `oninput={(e) => search = e.target.value}` on the `<input>` element to update `search` is mundane for something you do often:
+Having to do `value={search}` and `oninput={(e) => search = e.target.value}` on the `<input>` element to update `search` is mundane for something you do often:
 
-```svelte:App.svelte {3,4,8,14}
-<script>
+```svelte:App.svelte {3,4,10,14}
+<script lang="ts">
 	let list = $state(['angular', 'react', 'svelte', 'vue'])
 	let filteredList = $derived(list.filter(item => item.includes(search)))
 	let search = $state('')
 </script>
 
 <input
-	oninput={(e) => search = (e.target as HTMLInputElement).value}
-	value={search}
 	type="search"
+	value={search}
+	oninput={(e) => search = (e.target as HTMLInputElement).value}
 />
 
 <ul>
@@ -2105,44 +2128,22 @@ Having to set `value={search}` and do `oninput={(e) => search = e.target.value}`
 </ul>
 ```
 
-Thankfully, Svelte supports two-way data binding using the `bind:` directive. If you update the value, it updates the input and if you update the input, it updates the value:
+Thankfully, Svelte supports two-way data binding using the `bind:` directive. If you update the value, it updates the input and vice versa:
 
 ```svelte:App.svelte
-<input bind:value={search} type="search" />
-<!-- ... -->
-```
-
-Svelte provides many two-way bindings, and some readonly bindings. There are input, group, files, media and more bindings you can find in the [Svelte documentation](https://svelte.dev/docs/svelte/bind):
-
-```svelte:App.svelte
-<script>
-	let text = $state('Hello 👋')
-	let number = $state(0)
-	let checkbox = $state(false)
-	let range = $state(0)
-</script>
-
-<input type="text" bind:value={text} />
-<p>{text}</p>
-
-<input type="number" bind:value={number} />
-<p>{number}</p>
-
-<input type="checkbox" bind:checked={checkbox} />
-
-<input type="range" bind:value={range} min="0" max="100" />
+<input type="search" bind:value={search} />
 ```
 
 One of the more useful bindings is `bind:this` to get a reference to a DOM node such as the `<canvas>` element for example:
 
 ```svelte:App.svelte {3,10,14}
-<script>
-	// `undefined` until the component is added
+<script lang="ts">
+	// this is `undefined` until the component is added
 	let canvas
 
 	$effect(() => {
 		// ⛔️ don't do this
-		const canvas = document.querySelector('canvas')
+		const canvas = document.querySelector('canvas')!
 
 		// 👍️ bind the value instead
 		const ctx = canvas.getContext('2d')
@@ -2156,7 +2157,7 @@ One of the more useful bindings is `bind:this` to get a reference to a DOM node 
 
 Another useful thing to know about are **function bindings** if you need to validate some input, or link one value to another.
 
-Let's say you want to make a [Mocking SpongeBob](https://knowyourmeme.com/memes/mocking-spongebob) case converter to transform the text as the user types:
+This example transforms the text the user types into the [Mocking SpongeBob](https://knowyourmeme.com/memes/mocking-spongebob) case:
 
 ```svelte:App.svelte
 <script lang="ts">
@@ -2165,7 +2166,7 @@ Let's say you want to make a [Mocking SpongeBob](https://knowyourmeme.com/memes/
 	function toSpongeBobCase(text: string) {
 		return text
 			.split('')
-			.map((c) => (Math.random() > 0.5 ? c.toUpperCase() : c.toLowerCase()))
+			.map((c, i) => i % 2 === 1 ? c.toUpperCase() : c.toLowerCase())
 			.join('')
 	}
 </script>
@@ -2178,7 +2179,7 @@ Let's say you want to make a [Mocking SpongeBob](https://knowyourmeme.com/memes/
 ></textarea>
 ```
 
-This is a perfectly fine approach, but it could be simpler. Instead of passing an expression like `bind:value={expression}`, you can pass a function binding like `bind:property={get, set}` to have more control what happens when you read and write a value:
+Instead of passing an expression like `bind:property={expression}`, you can pass a function binding like `bind:property={get, set}` to have more control over what happens when you read and write a value:
 
 ```svelte:App.svelte
 <!-- ... -->
@@ -2192,9 +2193,9 @@ This is a perfectly fine approach, but it could be simpler. Instead of passing a
 
 ### Readonly Bindings
 
-Svelte provides a bunch of two-way bindings, and readonly bindings for different elements. I'm only going to demonstrate a couple of them, but you can find many more bindings in the [Svelte documentation for bind](https://svelte.dev/docs/svelte/bind).
+Svelte provides two-way bindings, and readonly bindings for different elements. I'm only going to demonstrate a couple of them, but you can find many more bindings in the [Svelte documentation for bind](https://svelte.dev/docs/svelte/bind).
 
-This includes media bindings for `<audio>`, `<video>`, and `<img>` elements:
+There are media bindings for `<audio>`, `<video>`, and `<img>` elements:
 
 ```svelte:App.svelte {3-5,9}
 <script lang="ts">
@@ -2216,7 +2217,7 @@ This includes media bindings for `<audio>`, `<video>`, and `<img>` elements:
 
 <style>
 	.container {
-	  max-width: 600px;
+	  width: 600px;
 
 		video {
 			width: 100%;
@@ -2235,7 +2236,7 @@ This includes media bindings for `<audio>`, `<video>`, and `<img>` elements:
 </style>
 ```
 
-There are also readonly bindings for visible elements that use [ResizeObserver](https://developer.mozilla.org/en-US/docs/Web/API/ResizeObserver) to measure dimension changes:
+There are also readonly bindings for visible elements that use [ResizeObserver](https://developer.mozilla.org/en-US/docs/Web/API/ResizeObserver) to measure any dimension changes:
 
 ```svelte:App.svelte {2-3,6}
 <script lang="ts">
@@ -2276,35 +2277,30 @@ There are also readonly bindings for visible elements that use [ResizeObserver](
 </style>
 ```
 
-### Window And Document Bindings
-
-### Component Bindings
-
 In the next section we're going to learn about components and how we can also bind the properties we pass to them, making the data flow from child to parent.
 
 ## Svelte Components
 
 > Frameworks are not tools for organizing your code, they are tools for organizing your mind. — [Rich Harris](https://www.youtube.com/watch?v=AdNJ3fydeao)
 
-You can think of components as reusable lego blocks that can include the markup, styles, and logic that can be reused across your app. You can use them with other blocks to compose bigger parts of your application.
-
-A Svelte component is a file that ends with the `.svelte` extension.
-
-In my opinion, **you should avoid creating components**. If you're not sure what to turn into a component — don't. Instead, write everything inside a single component until it gets complicated, or the reusable parts become obvious.
+A Svelte component is a file that ends with a `.svelte` extension. You can think of components as blocks that include the markup, styles, and logic that can be used across your app, and can be combined with other blocks.
 
 Let's use a basic todo list app as an example:
 
 ```svelte:Todos.svelte
-<script>
+<script lang="ts">
 	import { slide } from 'svelte/transition'
 
+	type Todo = { id: string; text: string; completed: boolean }
+	type Filter = 'all' | 'active' | 'completed'
+
 	let todo = $state('')
-	let todos = $state([])
-	let filter = $state('all')
+	let todos = $state<Todo[]>([])
+	let filter = $state<Filter>('all')
 	let filteredTodos = $derived(filterTodos())
 	let remaining = $derived(remainingTodos())
 
-	function addTodo(e) {
+	function addTodo(e: SubmitEvent) {
 		e.preventDefault()
 		todos.push({
 			id: crypto.randomUUID(),
@@ -2314,7 +2310,7 @@ Let's use a basic todo list app as an example:
 		todo = ''
 	}
 
-	function removeTodo(todo) {
+	function removeTodo(todo: Todo) {
 		todos = todos.filter((t) => t.id !== todo.id)
 	}
 
@@ -2326,7 +2322,7 @@ Let's use a basic todo list app as an example:
 		})
 	}
 
-	function setFilter(newFilter) {
+	function setFilter(newFilter: Filter) {
 		filter = newFilter
 	}
 
@@ -2356,7 +2352,7 @@ Let's use a basic todo list app as an example:
 <div>
 	<p>{remaining} {remaining === 1 ? 'item' : 'items'} left</p>
 
-	{#each ['all', 'active', 'completed'] as filter}
+	{#each ['all', 'active', 'completed'] as const as filter}
 		<button onclick={() => setFilter(filter)}>{filter}</button>
 	{/each}
 
@@ -2375,49 +2371,54 @@ todos/
 └── TodoFilter.svelte
 ```
 
-The way Svelte knows something is a component is by a capitalized tag such as `<Component>`, or dot notation like `<my.component>`. How you name the file is irrelevant. Most often you're going to see the PascalCase naming convention, so that's what I'm going to use. Personally, I prefer kebab-case.
+Component have to use a capitalized tag such as `<Component>`, or dot notation like `<my.component>`. How you name the file is irrelevant, but most often you're going to see PascalCase, so that's what I'm going to use. Personally, I prefer kebab-case.
 
-To pass data from one component to another, we use properties, or props for short — similar to how you pass attributes to elements:
+Let's create the `<AddTodo>` component that's going to handle adding a new todo. To pass data from one component to another, we use properties, or props for short — similar to how you pass attributes to elements.
 
-```svelte:App.svelte
+To receive the props, we use the `$props` rune:
+
+```svelte:AddTodo.svelte {7}
 <script lang="ts">
-	import Button from './Button.svelte'
+	interface Props {
+		todo: string
+		addTodo: () => void
+	}
+
+	let props: Props = $props()
 </script>
 
-<Button>Button</Button>
-<Button onclick={() => console.log('click')}>Click</Button>
+<form onsubmit={props.addTodo}>
+	<input type="text" bind:value={props.todo} />
+</form>
 ```
 
-To receive the props in a child component, you use the `$props` rune. Every component has a `children` prop to render any content inside the component tags using the `@render` tag:
+You can destructure props, rename them, set a default value, and spread the rest of the props:
 
-```svelte:Button.svelte {6-7}
+```svelte:AddTodo.svelte {7}
 <script lang="ts">
-	let props = $props()
+	interface Props {
+		todo: string
+		addTodo: () => void
+	}
+
+	let { todo = 'Fallback', addTodo, ...props }: Props = $props()
 </script>
 
-<button class={['base', props.class]} {...props}>
-	{@render props.children?.()}
-</button>
+<form onsubmit={addTodo} {...props}>
+	<input type="text" bind:value={todo} />
+</form>
 ```
 
-You can destructure props, set a default value, or rename them:
+To update `todo` from the child component, we have to let Svelte know it's okay for the child to mutate the parent state by using the `$bindable` rune:
 
-```ts:Button.svelte
-// using destructuring
-let { children, ...props } = $props()
+```svelte:AddTodo.svelte {7,11}
+<script lang="ts">
+	interface Props {
+		todo: string
+		addTodo: () => void
+	}
 
-// setting default values
-let {	disabled = true, ...props } = $props()
-
-// renaming values
-let { children: offspring, ...props } = $props()
-```
-
-First we'll create the component that handles adding a new todo. To receive the props, we use the `$props` rune. Here we bind the input value to the `todo` variable in the parent component, so we have to let Svelte know it's okay for the child to mutate the parent state by using the `$bindable` rune:
-
-```svelte:AddTodo.svelte {2,6}
-<script>
-	let { todo = $bindable(), addTodo } = $props()
+	let { todo = $bindable('Fallback'), addTodo } = $props()
 </script>
 
 <form onsubmit={addTodo}>
@@ -2425,39 +2426,48 @@ First we'll create the component that handles adding a new todo. To receive the 
 </form>
 ```
 
-You can now bind the `todo` prop:
+You can now safely bind the `todo` prop:
 
-```svelte:Todos.svelte {6}
-<script>
+```svelte:Todos.svelte {4,8}
+<script lang="ts">
 	import AddTodo from './AddTodo.svelte'
+
+	let todo = $state('')
 	// ...
 </script>
 
 <AddTodo bind:todo {addTodo} />
 ```
 
-In reality, you don't have to do this. I just wanted to demonstrate how to use the `$bindable` rune if you have to. It makes more sense to move the `todo` state inside the component for adding todos:
+In reality, you don't have to do this. It makes more sense to move the `todo` state inside `<AddTodo>`and use a prop to change it:
 
 ```svelte:Todos.svelte
-<script>
-	function addTodo(todo) {
+<script lang="ts">
+	function addTodo(todo: Todo) {
 		todos.push({
 			id: crypto.randomUUID(),
 			text: todo,
 			completed: false
 		})
 	}
+	// ...
 </script>
 
 <AddTodo {addTodo} />
 ```
 
+Let's update the `<AddTodo>` component:
+
 ```svelte:AddTodo.svelte
-<script>
-	let { addTodo } = $props()
+<script lang="ts">
+	interface Props {
+		addTodo: (todo: string) => void
+	}
+
+	let { addTodo }: Props = $props()
 	let todo = $state('')
 
-	function onsubmit(e) {
+	function onsubmit(e: SubmitEvent) {
 		e.preventDefault()
 		addTodo(todo)
 		todo = ''
@@ -2469,15 +2479,22 @@ In reality, you don't have to do this. I just wanted to demonstrate how to use t
 </form>
 ```
 
-I'm using a form to submit a todo when you press enter for convenience. Instead of binding the value, you can get the value from the form `onsubmit` event. Later in this section, I'm going to show you a better approach.
+You can submit the todo by pressing enter, and it won't reload the page.
 
-Let's create a component that renders the list of todos and spice it up with a built-in Svelte transition:
+Instead of binding the value, you can also get the value from the form `onsubmit` event. Later in this section, we're going to look into using callback props instead.
+
+Let's create the `<TodoList>` component to render the list of todos, and use a Svelte transition to spice it up:
 
 ```svelte:TodoList.svelte
-<script>
+<script lang="ts">
 	import { slide } from 'svelte/transition'
 
-	let { todos, removeTodo } = $props()
+	interface Props {
+		todos: { id: number; text: string; completed: boolean }[]
+		removeTodo: (id: number) => void
+	}
+
+	let { todos, removeTodo }: Props = $props()
 </script>
 
 <ul>
@@ -2491,8 +2508,10 @@ Let's create a component that renders the list of todos and spice it up with a b
 </ul>
 ```
 
+Let's pass the `filteredTodos` and `removeTodo` props:
+
 ```svelte:Todos.svelte {3,7}
-<script>
+<script lang="ts">
 	import AddTodo from './AddTodo.svelte'
 	import TodoList from './TodoList.svelte'
 </script>
@@ -2501,17 +2520,25 @@ Let's create a component that renders the list of todos and spice it up with a b
 <TodoList todos={filteredTodos} {removeTodo} />
 ```
 
-Now we can create the component that filters the todos:
+Let's create the `<TodoFilter>` component to filter the todos:
 
 ```svelte:TodoFilter.svelte
-<script>
-	let { remaining, setFilter, clearCompleted } = $props()
+<script lang="ts">
+	type Filter = 'all' | 'active' | 'completed'
+
+	interface Props {
+		remaining: number
+		setFilter: (filter: Filter) => void
+		clearCompleted: () => void
+	}
+
+	let { remaining, setFilter, clearCompleted }: Props = $props()
 </script>
 
 <div>
 	<p>{remaining} {remaining === 1 ? 'item' : 'items'} left</p>
 
-	{#each ['all', 'active', 'completed'] as filter}
+	{#each ['all', 'active', 'completed'] as const as filter}
 		<button onclick={() => setFilter(filter)}>{filter}</button>
 	{/each}
 
@@ -2519,8 +2546,10 @@ Now we can create the component that filters the todos:
 </div>
 ```
 
+Let's pass the `remaining`, `setFilter`, and `clearCompleted` props:
+
 ```svelte:Todos.svelte {4,9}
-<script>
+<script lang="ts">
 	import AddTodo from './AddTodo.svelte'
 	import TodoList from './TodoList.svelte'
 	import TodoFilter from './TodoFilter.svelte'
@@ -2531,13 +2560,18 @@ Now we can create the component that filters the todos:
 <TodoFilter {remaining} {setFilter} {clearCompleted} />
 ```
 
-I left the todo item component for last to show you the downside of abusing bind:
+I left the `<TodoItem>` component for last to show the downside of abusing bindings:
 
 ```svelte:TodoItem.svelte
-<script>
+<script lang="ts">
 	import { slide } from 'svelte/transition'
 
-	let { todo = $bindable(), removeTodo } = $props()
+	interface Props {
+		todo: { id: number; text: string; completed: boolean }
+		removeTodo: (id: number) => void
+	}
+
+	let { todo = $bindable(), removeTodo }: Props = $props()
 </script>
 
 <li transition:slide>
@@ -2547,10 +2581,10 @@ I left the todo item component for last to show you the downside of abusing bind
 </li>
 ```
 
-This works, but Svelte is going to throw a bunch of warnings because you're mutating `todos` in the parent state, so now we have to make `todos` bindable:
+This works, but you're going to get warnings for mutating `todos` in the parent state if you don't make `todos` bindable:
 
 ```svelte:Todos.svelte {8}
-<script>
+<script lang="ts">
 	import AddTodo from './AddTodo.svelte'
 	import TodoList from './TodoList.svelte'
 	import TodoFilter from './TodoFilter.svelte'
@@ -2561,11 +2595,13 @@ This works, but Svelte is going to throw a bunch of warnings because you're muta
 <TodoFilter {remaining} {setFilter} {clearCompleted} />
 ```
 
-```svelte:TodoItem.svelte {4,10}
-<script>
-	import TodoItem from './TodoItem.svelte'
+You have to bind each `todo` to the `todos` array:
 
-	let { todos = $bindable(), removeTodo } = $props()
+```svelte:TodoItem.svelte {4,10}
+<script lang="ts">
+	import TodoItem from './TodoItem.svelte'
+	// ...
+	let { todos = $bindable(), removeTodo }: Props = $props()
 </script>
 
 <ul>
@@ -2577,11 +2613,13 @@ This works, but Svelte is going to throw a bunch of warnings because you're muta
 </ul>
 ```
 
-In general, avoid mutating props to avoid unexpected state changes. If you want to update a value from a child component, callback props are a better option. Let's change the todos component to show you what I mean:
+For this reason, you should **avoid mutating props** to avoid unexpected state changes. You can use a callback prop instead, to update a value from a child component.
 
-```svelte:Todos.svelte {3-11,14-17,19-22,25-27}
-<script>
-	function addTodo(e) {
+Let's update the `<Todos>` component to use callback props:
+
+```svelte:Todos.svelte
+<script lang="ts">
+	function addTodo(e: SubmitEvent) {
 		e.preventDefault()
 		const form = e.currentTarget
 		const formData = new FormData(form)
@@ -2609,11 +2647,12 @@ In general, avoid mutating props to avoid unexpected state changes. If you want 
 <TodoFilter {remaining} {setFilter} {clearCompleted} />
 ```
 
-Let's update the offending components to use callback props to update the todos instead of binding props everywhere, which could lead to unpredictable behavior:
+The last thing to do is to update the rest of the components to accept callback props:
 
-```svelte:AddTodo.svelte {2,5}
-<script>
-	let { addTodo } = $props()
+```svelte:AddTodo.svelte {3,6}
+<script lang="ts">
+	// ...
+	let { addTodo }: Props = $props()
 </script>
 
 <form onsubmit={addTodo}>
@@ -2622,10 +2661,10 @@ Let's update the offending components to use callback props to update the todos 
 ```
 
 ```svelte:TodoList.svelte {4-9}
-<script>
+<script lang="ts">
 	import TodoItem from './TodoItem.svelte'
-
-	let { todos, toggleTodo, updateTodo, removeTodo } = $props()
+	// ...
+	let { todos, toggleTodo, updateTodo, removeTodo }: Props = $props()
 </script>
 
 <ul>
@@ -2636,10 +2675,10 @@ Let's update the offending components to use callback props to update the todos 
 ```
 
 ```svelte:TodoItem.svelte {4,10,15,18}
-<script>
+<script lang="ts">
 	import { slide } from 'svelte/transition'
-
-	let { todo, toggleTodo, updateTodo, removeTodo } = $props()
+	// ...
+	let { todo, toggleTodo, updateTodo, removeTodo }: Props = $props()
 </script>
 
 <li transition:slide>
@@ -2657,22 +2696,9 @@ Let's update the offending components to use callback props to update the todos 
 </li>
 ```
 
-As a cherry on top, let's save the todos in local storage:
+In my opinion, **you should avoid creating components**. If you're not sure what to turn into a component — don't. Instead, write everything inside a single component until it gets complicated, or the reusable parts become obvious.
 
-```svelte:Todos.svelte
-<script>
-	// ...
-	$effect(() => {
-		todos = JSON.parse(localStorage.getItem('todos') || '[]')
-	})
-
-	$effect(() => {
-		localStorage.setItem('todos', JSON.stringify(todos))
-	})
-</script>
-```
-
-There's a better way to do this, but I'm going to leave it here for now. Later we're going to learn how to talk between components without props, using the context API.
+Later we're going to learn how to talk between components without props, using the context API.
 
 ## Component Composition
 

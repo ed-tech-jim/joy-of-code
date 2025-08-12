@@ -2159,7 +2159,7 @@ One of the more useful bindings is `bind:this` to get a reference to a DOM node 
 ```svelte:App.svelte {3,10,14}
 <script lang="ts">
 	// this is `undefined` until the component is added
-	let canvas
+	let canvas: HTMLCanvasElement
 
 	$effect(() => {
 		// ⛔️ don't do this
@@ -2719,11 +2719,13 @@ Later we're going to learn how to talk between components without props, using t
 
 ## Component Composition
 
-You can compose components by nesting them, using snippets which hold content that can be passed as props to components similar to slots, and communicate between components with the context API without props or events.
+You can compose components through **nesting** and **snippets** which hold content that can be passed as props to components similar to slots. Components can also talk to each other through the context API without props or events.
 
 ### Component Nesting
 
-To demonstrate how wonderful component composition is in Svelte, let's create an accordion component that can have many accordion items. You can create these files inside an `accordion` folder:
+To show component composition in Svelte, let's create an accordion component that can have many accordion items.
+
+You can create these files inside an `accordion` folder:
 
 ```console:files
 accordion/
@@ -2741,7 +2743,7 @@ export { default as AccordionItem } from './AccordionItem.svelte'
 
 In HTML, you can nest elements inside other elements:
 
-```html:accordion.html
+```html:index.html
 <div class="accordion">
 	<div class="accordion-item">
 		<button>
@@ -2753,10 +2755,30 @@ In HTML, you can nest elements inside other elements:
 </div>
 ```
 
-The fun part of using a framework like Svelte is that you get to decide the API of your components and how to compose them. Here's one way how we can take the accordion HTML and turn it into a component ready to be used across your app:
+The fun part of using a framework like Svelte is that you get to decide how you want to compose components.
 
-```svelte:App.svelte
-<script>
+The `<Accordion>` and `<AccordionItem>` components can accept children like regular HTML elements using a `children` snippet:
+
+```svelte:App.svelte {6-12}
+<script lang="ts">
+	import { Accordion, AccordionItem } from './accordion'
+</script>
+
+<Accordion>
+	{#snippet children()}
+		<AccordionItem title="Item A">
+			{#snippet children()}
+				Content
+			{/snippet}
+		</AccordionItem>
+	{/snippet}
+</Accordion>
+```
+
+This is tedious, so every component has an implicit `children` prop. Any content inside the component tags becomes part of the `children` snippet:
+
+```svelte:App.svelte {6-8}
+<script lang="ts">
 	import { Accordion, AccordionItem } from './accordion'
 </script>
 
@@ -2767,31 +2789,39 @@ The fun part of using a framework like Svelte is that you get to decide the API 
 </Accordion>
 ```
 
-The `<Accordion>` component accepts children like HTML — which can be anything. In this case, it's a `<AccordionItem>` component which accepts a `title` prop. Every component has an implicit `children` prop which is a snippet you can render using the `@render` tag. Any content inside the component tags becomes part of the `children` snippet:
+You can get the `children` from the props, and render them using the `@render` tag:
 
-```svelte:Accordion.svelte {6-11,13-14}
-<script>
+```svelte:Accordion.svelte {7-11,14}
+<script lang="ts">
 	let { children } = $props()
 </script>
 
 <div class="accordion">
-	<!-- conditional with a fallback -->
+	<!-- using a conditional with a fallback -->
 	{#if children}
 		{@render children()}
 	{:else}
 		<p>Fallback content</p>
 	{/if}
 
-	<!-- optional chaining -->
+	<!-- using optional chaining -->
 	{@render children?.()}
 </div>
 ```
 
-The `<AccordionItem>` accepts a `label` prop and we can show the accordion item content using the `children` prop which acts like a catch-all for any content inside the component:
+The `<AccordionItem>` accepts a `label` prop, and we can show the accordion item content using the `children` prop which acts like a catch-all for any content inside the component:
 
-```svelte:AccordionItem.svelte {2,13,19}
-<script>
-	let { label, children } = $props()
+```svelte:AccordionItem.svelte {10,21,27}
+<script lang="ts">
+	import type { Snippet } from 'svelte'
+	import { slide } from 'svelte/transition'
+
+	interface Props {
+		label: string
+		children: Snippet
+	}
+
+	let { label, children }: Props = $props()
 
 	let open = $state(false)
 
@@ -2814,10 +2844,14 @@ The `<AccordionItem>` accepts a `label` prop and we can show the accordion item 
 </div>
 ```
 
-That's it! You can now use the `<Accordion>` component in your app. That being said, this has limited composability. Let's say you don't like the icon, or position of the individual accordion elements. This could lead to a silly amount of props and conditionals:
+That's it! 😄 You can now use the `<Accordion>` component in your app.
+
+That being said, this has limited composability if you want to change the icon, or position of the individual accordion elements.
+
+Before you know it, you end up with an explosion of props:
 
 ```svelte:App.svelte {7-10}
-<script>
+<script lang="ts">
 	import { Accordion, AccordionItem } from './accordion'
 </script>
 
@@ -2837,11 +2871,18 @@ That's not a way to live your life! Instead, you can use [inversion of control](
 
 ### Snippets
 
-Let's modify the `<AccordionItem>` component to accept an `accordionItem` snippet as a prop instead, and pass it the `open` state and `toggle` function so we have access to them inside the snippet:
+Let's modify the `<AccordionItem>` component to accept an `accordionItem` snippet as a prop instead, and pass it the `open` state and `toggle` function, so we have access to them inside the snippet:
 
-```svelte:AccordionItem.svelte {2,10}
-<script>
-	let { accordionItem } = $props()
+```svelte:AccordionItem.svelte {8,9,11-13,17}
+<script lang="ts">
+	import type { Snippet } from 'svelte'
+
+	interface Props {
+		accordionItem?: Snippet<[accordionItem: { open: boolean; toggle: () => void }]>
+	}
+
+	let { accordionItem }: Props = $props()
+	let open = $state(false)
 
 	function toggle() {
 		open = !open
@@ -2853,10 +2894,10 @@ Let's modify the `<AccordionItem>` component to accept an `accordionItem` snippe
 </div>
 ```
 
-Snippets are just functions! You can define and render a snippet in your component for markup reuse, or delegate the rendering to another component like `<AccordionItem>` by passing it as a prop:
+You can define and render a snippet in your component for markup reuse, or delegate the rendering to another component by passing it as a prop:
 
 ```svelte:App.svelte {6-17,20}
-<script>
+<script lang="ts">
 	import { slide } from 'svelte/transition'
 	import { Accordion, AccordionItem } from './accordion'
 </script>
@@ -2879,17 +2920,16 @@ Snippets are just functions! You can define and render a snippet in your compone
 </Accordion>
 ```
 
-If you use a snippet inside the component, it implicitly becomes a prop on the component for convenience:
+You can create an implicit prop by using a snippet inside the component tags. In this example, the `accordionItem` snippet becomes a prop on the component:
 
-```svelte:App.svelte {8-20}
-<script>
+```svelte:App.svelte {8-19}
+<script lang="ts">
 	import { slide } from 'svelte/transition'
 	import { Accordion, AccordionItem } from './accordion'
 </script>
 
 <Accordion>
 	<AccordionItem>
-		<!-- the snippet becomes a prop -->
 		{#snippet accordionItem({ open, toggle })}
 			<button onclick={toggle} class="accordion-heading">
 				<div>Item A</div>
@@ -2910,14 +2950,16 @@ If you use a snippet inside the component, it implicitly becomes a prop on the c
  You can export snippets from <code>&lt;script module&gt;</code> if they don't reference any state in a <code>script</code> block, and use them in other components.
 </Card>
 
-This gives you complete control how the accordion item is rendered. I don't know about you, but that's really cool.
+This gives you complete control how the accordion item is rendered.
 
-Alright, but what if you're asked to add a feature to let the user control the open and closed state of the accordion items?
+### The Context API
 
-You might bind the `open` prop from the `<Accordion>` component and pass the prop which works but then you have to add another prop:
+Alright, but what if you're tasked to add a feature which lets the user control the open and closed state of the accordion items?
 
-```svelte:App.svelte {5,12}
-<script>
+You might bind the `open` prop from the `<Accordion>` component, but then you have an extra prop:
+
+```svelte:App.svelte {5,12,14}
+<script lang="ts">
 	import { slide } from 'svelte/transition'
 	import { Accordion, AccordionItem } from './accordion'
 
@@ -2929,26 +2971,26 @@ You might bind the `open` prop from the `<Accordion>` component and pass the pro
 </button>
 
 <Accordion bind:open>
-	<!-- tedious -->
+	<!-- extra prop -->
 	<AccordionItem {open} />
 </Accordion>
 ```
 
-How do we communicate this change from the `<Accordion>` component to its child components?
+Instead of using props, you can use the context API. The context API is just a JavaScript [Map](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map) object that holds key-value pairs.
 
-### The Context API
+You can set the context in the parent component by using the `setContext` function, which accepts a key and a value:
 
-You could "lift state up" and use props everywhere, or you could use the context API which was made to solve this problem.
-
-Under the hood, the context API is just a JavaScript [Map](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map) object that holds key-value pairs.
-
-First you have to set the context in the parent component using `setContext` which accepts a key and a value:
-
-```svelte:Accordion.svelte {2,6-8}
-<script>
+```svelte:Accordion.svelte {10,12-14}
+<script lang="ts">
 	import { setContext } from 'svelte'
+	import type { Snippet } from 'svelte'
 
-	let { open = $bindable(), children } = $props()
+	interface Props {
+		open: boolean
+		children: Snippet
+	}
+
+	let { open = $bindable(), children }: Props = $props()
 
 	setContext('accordion', {
 		get open() { return open }
@@ -2960,13 +3002,14 @@ First you have to set the context in the parent component using `setContext` whi
 </div>
 ```
 
-Now you can use `getContext` in a child component to get the context value. Since `accordion.open` is a reactive value, we can change the `open` state to be a derived value which updates when `accordion.open` changes:
+You can get the context in a child component with the `getContext` function. Since `accordion.open` is a reactive value, we can change the `open` state to be a derived value, which updates when `accordion.open` changes:
 
-```svelte:AccordionItem.svelte {2,6,7}
-<script>
+```svelte:AccordionItem.svelte {2,7,8}
+<script lang="ts">
 	import { getContext } from 'svelte'
 
-	let { accordionItem } = $props()
+	// ...
+	let { accordionItem }: Props = $props()
 
 	const accordion = getContext('accordion')
 	let open = $derived(accordion.open)
@@ -2981,7 +3024,34 @@ Now you can use `getContext` in a child component to get the context value. Sinc
 </div>
 ```
 
-That's it! As you can see from the example, you can also store reactive state in context. Let's take a step back and explain this code because it's very important to understand:
+That's it! 😄
+
+### Type-Safe Context
+
+You can make the context API more type-safe by creating a context file with helper functions:
+
+```ts:context.ts
+import { getContext, setContext } from 'svelte'
+
+interface Accordion {
+	open: boolean
+}
+
+// unique key
+const key = {}
+
+export function setAccordionContext(open: Accordion) {
+	setContext(key, open)
+}
+
+export function getAccordionContext() {
+	return getContext(key) as Accordion
+}
+```
+
+### Passing State Into Context
+
+You've probably noticed how you can store reactive state in context. Let's take a step back, and explain how this works:
 
 ```ts:example
 // why this?
@@ -2993,7 +3063,7 @@ setContext('accordion', {
 setContext('accordion', { open })
 ```
 
-When you're referencing state in Svelte, you're accessing the current value. The reason why passing the `open` state loses reactivity is because how JavaScript works. If you just pass the current value of `open` state, it's never going to update.
+If you remember how state is a regular value, then you already know how this isn't reactive because you're only reading the **current value** of `open` which is never going to update.
 
 Let's say this is the context API:
 
@@ -3009,7 +3079,9 @@ function getContext(key) {
 }
 ```
 
-The value passed to context is not a reference to the `value` variable, but the `🍌` value itself. If `value` changes after the context is set, it won't update:
+The value passed to context is not a reference to the `value` variable, but the `🍌` value itself.
+
+If `value` changes after the context is set, it won't update:
 
 ```ts:example
 let emoji = '🍌'
@@ -3023,7 +3095,7 @@ emoji = '🍎'
 console.log(ctx.emoji) // 🍌
 ```
 
-Svelte doesn't change how JavaScript works — you need a mechanism which gets and returns the latest value:
+Svelte doesn't change how JavaScript works — you need a mechanism which returns the latest value:
 
 ```ts:example
 let emoji = '🍌'
@@ -3039,7 +3111,7 @@ emoji = '🍎'
 console.log(ctx.getLatestValue()) // 🍎
 ```
 
-I used a [getter](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Functions/get) because the syntax is nicer than invoking a function. To get the latest value, you just access `accordion.open`. That being said, you can use a **function**, **class**, **accessor**, or **proxied state** to get and set the value:
+Same as before, you can use a **function**, **class**, **accessor**, or **proxied state** to get and set the value:
 
 ```ts:example
 import { setContext } from 'svelte'
@@ -3087,20 +3159,20 @@ ctx.emoji.current = '🍎'
 
 ### Module Context
 
-There's one last trick you should know when it comes to component composition, and it's the `module` script block.
+There's one more trick you should know when it comes to component composition, and it's the `module` script block.
 
-So far, we learned to use the regular script block for component logic that's unique for every instance:
+So far, we used the regular script block for component logic that's unique for every instance:
 
 ```svelte:Counter.svelte {3}
 <script lang="ts">
-	// different for every instance
+	// unique for every instance
 	let uid = crypto.randomUUID()
 </script>
 
 <p>{uid}</p>
 ```
 
-You can use the `module` script block to share code across component instances:
+If you want to share code across component instances, you can use the `module` script block:
 
 ```svelte:Counter.svelte {1,3}
 <script lang="ts" module>
@@ -3117,11 +3189,10 @@ You can use the `module` script block to share code across component instances:
 
 You can also share state between instances:
 
-```svelte:Counter.svelte {6}
+```svelte:Counter.svelte {5}
 <script lang="ts" module>
 	// same for every instance
 	let uid = crypto.randomUUID()
-
 	// state
 	let count = $state(0)
 </script>
@@ -3130,16 +3201,14 @@ You can also share state between instances:
 <button onclick={() => count++}>{count}</button>
 ```
 
-You can use this to control media playback across instances, or if you simply want to export some functions from the module:
+This could be useful to control media playback across instances, or exporting snippets and functions the module:
 
-```svelte:Counter.svelte {9-11}
+```svelte:Counter.svelte {7-9}
 <script lang="ts" module>
 	// outputs different random number for every instance
 	let uid = crypto.randomUUID()
-
 	// state
 	let count = $state(0)
-
 	// export
 	export function reset() {
 		count = 0
@@ -3150,7 +3219,7 @@ You can use this to control media playback across instances, or if you simply wa
 <button onclick={() => count++}>{count}</button>
 ```
 
-Give it a try!
+This works great for sharing state across component instances, or just exporting some functions from the module:
 
 ```svelte:App.svelte
 <script>
@@ -3165,7 +3234,7 @@ Give it a try!
 <button onclick={() => reset()}>Reset</button>
 ```
 
-You can have a regular script block, and a `module` script block in your component.
+You can also have a regular script block, and a `module` script block in the same component.
 
 ## Transitions And Animations
 
@@ -3178,7 +3247,7 @@ To use a transition, you use the `transition:` directive on an element. Transiti
 This example uses the `fade` transition from Svelte to fade in and out two elements. The first element has a `duration` option of `600` milliseconds, and the second element has a `delay` option of `600` milliseconds:
 
 ```svelte:App.svelte {2,11-12}
-<script>
+<script lang="ts">
 	import { fade } from 'svelte/transition'
 
 	let play = $state(false)
@@ -3197,7 +3266,7 @@ This example uses the `fade` transition from Svelte to fade in and out two eleme
 You can have separate intro and outro transitions using the `in:` and `out:` directives:
 
 ```svelte:App.svelte {2,13-14,19-20}
-<script>
+<script lang="ts">
 	import { fade, fly } from 'svelte/transition'
 	import { cubicInOut } from 'svelte/easing'
 
@@ -3230,10 +3299,10 @@ There's also a bunch of transition events you can listen to, including `introsta
 
 ### Local And Global Transitions
 
-Let's say you have an `each` block that renders a list of items using a staggered transition inside of an `if` block:
+Let's say you have an `{#each ...}` block that renders a list of items using a staggered transition inside of an `{#if ...}` block:
 
-```svelte:problem {9-13}
-<script>
+```svelte:App.svelte {9-13}
+<script lang="ts">
 	import { fade } from 'svelte/transition'
 
 	let play = $state(false)
@@ -3250,17 +3319,19 @@ Let's say you have an `each` block that renders a list of items using a staggere
 {/if}
 ```
 
-It doesn't work! Why?
+It doesn't work, but why?
 
-**Transitions are local by default** which means they only play when the block they belong to is added or removed from the DOM, and not the parent block unless you use the `global` modifier:
+**Transitions are local by default** which means they only play when the block they belong to is added or removed from the DOM and not the parent block.
 
-```svelte:solution
+The solution is to use the `global` modifier:
+
+```svelte:App.svelte
 <div transition:fade|global={{ delay: i * 100 }}>
 	{i + 1}
 </div>
 ```
 
-In older version of Svelte, transitions were global by default for historical reasons. Keep that in mind if you come across some old Svelte code.
+Transitions were global by default in older versions of Svelte, so keep that in mind if you come across older Svelte code.
 
 ### Playing Transitions Immediately
 
@@ -3268,9 +3339,17 @@ You might have noticed that transitions don't play immediately when you open a p
 
 If you want that behavior, you can create a component with an effect to trigger the transition when it's added to the DOM:
 
-```svelte:Fade.svelte {3,5-7}
-<script>
-	let { children, options } = $props()
+```svelte:Fade.svelte {11,13-15}
+<script lang="ts">
+	import { fade, type FadeParams } from 'svelte/transition'
+	import type { Snippet } from 'svelte'
+
+	interface Props {
+		children: Snippet
+		options?: FadeParams
+	}
+
+	let { children, options }: Props = $props()
 	let play = $state(false)
 
 	$effect(() => {
@@ -3288,7 +3367,7 @@ If you want that behavior, you can create a component with an effect to trigger 
 Now you can use the `<Fade>` component in your app:
 
 ```svelte:Example.svelte
-<script>
+<script lang="ts">
 	import { Fade } from './transitions'
 </script>
 
@@ -3297,7 +3376,7 @@ Now you can use the `<Fade>` component in your app:
 </Fade>
 ```
 
-You could also create a more general `<Transition>` component that accepts a prop for the transition you want to use like `<Transition type="fade">` and conditionally that type of transition.
+You could create a more general `<Transition>` component that conditionally renders the type of transition you want like `<Transition type="fade">`.
 
 ### Custom Transitions
 
@@ -3305,16 +3384,22 @@ You can find more built-in transitions in the [Svelte documentation](https://sve
 
 Custom transitions are regular function which have to return an object with the transition options and a `css`, or `tick` function:
 
-```svelte:App.svelte {4-14,22}
-<script>
+```svelte:App.svelte {10-20,28}
+<script lang="ts">
 	import { elasticOut } from 'svelte/easing'
 
-	function customTransition(node, options) {
+	interface Options {
+		delay?: number
+		duration?: number
+		easing?: (t: number) => number
+	}
+
+	function customTransition(node: HTMLElement, options: Options = {}) {
 		return {
 			delay: options.delay || 0,
 			duration: options.duration || 2000,
 			easing: options.easing || elasticOut,
-			css: (t) => `
+			css: (t: number) => `
 				color: hsl(${360 * t} , 100%, 80%);
 				transform: scale(${t});
 			`
@@ -3339,15 +3424,19 @@ You can reverse the transition by using the `u` argument which is a transition p
 
 Alternatively, you can return a `tick` function when you need to use JavaScript for a transition and Svelte is going to use the [requestAnimationFrame](https://developer.mozilla.org/en-US/docs/Web/API/window/requestAnimationFrame) API:
 
-```svelte:App.svelte {8-26,34}
-<script>
+```svelte:App.svelte {12-30,38}
+<script lang="ts">
+	interface Options {
+		duration?: number
+	}
+
 	const chars = '!@#$%&*1234567890-=_+[]{}|;:,.<>/?'
 
 	function getRandomCharacter() {
 		return chars[Math.floor(Math.random() * chars.length)]
 	}
 
-	function scrambleText(node, options) {
+	function scrambleText(node: HTMLElement, options: Options = {}) {
 		const finalText = node.textContent
 		const length = finalText.length
 
@@ -3384,8 +3473,15 @@ You would of course define these custom transitions using whichever method you p
 In this example, we have a section for published posts and archived posts where you can archive and unarchive post:
 
 ```svelte:App.svelte
-<script>
-	let posts = $state([
+<script lang="ts">
+	interface Post {
+		id: number
+		title: string
+		description: string
+		published: boolean
+	}
+
+	let posts = $state<Post[]>([
 		{
 			id: 1,
 			title: 'Title',
@@ -3395,12 +3491,12 @@ In this example, we have a section for published posts and archived posts where 
 		// ...
 	])
 
-	function togglePublished(post) {
+	function togglePublished(post: Post) {
 		const index = posts.findIndex((p) => p.id === post.id)
 		posts[index].published = !posts[index].published
 	}
 
-	function removePost(post) {
+	function removePost(post: Post) {
 		const index = posts.findIndex((p) => p.id === post.id)
 		posts.splice(index, 1)
 	}
@@ -3441,12 +3537,14 @@ In this example, we have a section for published posts and archived posts where 
 </div>
 ```
 
-This works, but the user experience is not great! In the real world, items don't simply teleport around like that. The user should have more context for what happened when performing an action.
+This works, but the user experience is not great!
 
-In Svelte, you can coordinate transitions between different elements using the `crossfade` transition. The `crossfade` transition creates two transitions named `send` and `receive` which accept a unique key to know what to transition:
+In the real world, items don't simply teleport around like that. The user should have more context for what happened when performing an action. In Svelte, you can coordinate transitions between different elements using the `crossfade` transition.
+
+The `crossfade` transition creates two transitions named `send` and `receive` which accept a unique key to know what to transition:
 
 ```svelte:App.svelte {2,4,10-11,17-18}
-<script>
+<script lang="ts">
 	import { crossfade } from 'svelte/transition'
 
 	const [send, receive] = crossfade({})
@@ -3492,12 +3590,12 @@ These days there are web APIs to transition view changes like the [View Transiti
 
 ### FLIP Animations
 
-In our previous example, we used the `crossfade` transition to coordinate transitions between different elements, but it's not perfect. When you move a post between being archived and published, all the items "wait" for the transition to end before they "snap" into their new position.
+In the previous example, we used the `crossfade` transition to coordinate transitions between different elements, but it's not perfect. When you move a post between being archived and published, all the items "wait" for the transition to end before they "snap" into their new position.
 
-We can fix this by using Svelte's `animate:` directive and the `flip` function which calculates the start and end position of an element and animates between them:
+We can fix this by using Svelte's `animate:` directive and the `flip` function, which calculates the start and end position of an element and animates between them:
 
 ```svelte:App.svelte {2,11,19}
-<script>
+<script lang="ts">
 	import { flip } from 'svelte/animate'
 	import { crossfade } from 'svelte/transition'
 
@@ -3531,15 +3629,23 @@ You can make your own custom animation functions! Animations are triggered only 
 Here's a simplified version of a custom FLIP animation I _yoinked_ from the Svelte source code:
 
 ```ts:animations.ts
-function flip(node, { from, to }, params) {
+interface Options {
+	duration?: number
+}
+
+function flip(
+	node: HTMLElement,
+	{ from, to }: { from: DOMRect; to: DOMRect },
+	options: Options = {}
+) {
 	const dx = from.left - to.left
 	const dy = from.top - to.top
 	const dsx = from.width / to.width
 	const dsy = from.height / to.height
 
 	return {
-		duration: params.duration || 2000,
-		css: (t, u) => {
+		duration: options.duration || 2000,
+		css: (t: number, u: number) => {
 			const x = dx * u
 			const y = dy * u
 			const sx = dsx + (1 - dsx) * t
@@ -3554,14 +3660,12 @@ This works the same as custom transitions, so you can remind yourself how that w
 
 ### Tweened Values And Springs
 
-Imagine if you could take the animation engine from CSS and interpolate any value, including objects and arrays.
-
-This is where the `Tween` and `Spring` classes come in handy.
+Imagine if you could take the CSS animation engine, but interpolate any number, including objects and arrays. This is where the `Tween` and `Spring` classes come in handy.
 
 The `Tween` class accepts a target value and options. You can use the `current` property to get the current value, and `target` to update the value:
 
 ```svelte:App.svelte {2,5,8,12,22}
-<script>
+<script lang="ts">
 	import { Tween } from 'svelte/motion'
 	import { cubicInOut } from 'svelte/easing'
 
@@ -3591,7 +3695,7 @@ The `Tween` class accepts a target value and options. You can use the `current` 
 The `Tween` class has the same methods as `Tween`, but uses spring physics and doesn't have a duration. Instead, it has `stiffness`, `damping`, and `precision` options:
 
 ```svelte:App.svelte {2,4,7,11,21}
-<script>
+<script lang="ts">
 	import { Spring } from 'svelte/motion'
 
 	const size = new Spring(50, { stiffness: 0.1, damping: 0.25, precision: 0.1 })
@@ -3617,7 +3721,7 @@ The `Tween` class has the same methods as `Tween`, but uses spring physics and d
 </svg>
 ```
 
-They both have a `set` function which returns a promise and lets you override the options:
+They both have a `set` function, which returns a promise and lets you override the options:
 
 ```ts:App.svelte
 async function onmousedown() {
@@ -3631,7 +3735,7 @@ async function onmousedown() {
 If you want to update the `Tween` or `Spring` value when a reactive value changes, you can use the `of` method:
 
 ```svelte:App.svelte
-<script>
+<script lang="ts">
 	import { Spring, Tween } from 'svelte/motion'
 
 	let { value, options } = $props()
@@ -3677,7 +3781,7 @@ If you tried this example in Svelte, you would get a `GSAP target .box not found
 For this reason, Svelte provides an `onMount` lifecycle function. The "lifecyle" part refers to the life of the component, since it accepts a callback that runs when it's added and removed:
 
 ```svelte:App.svelte {2,5-7}
-<script>
+<script lang="ts">
 	import { onMount } from 'svelte'
 	import gsap from 'gsap'
 
@@ -3700,15 +3804,15 @@ For this reason, Svelte provides an `onMount` lifecycle function. The "lifecyle"
 
 This works! That being said, it's not ideal that we query any element with a `.box` class on the page.
 
-Using Svelte, we should get a reference to the element instead. I also want to show you that you can return a function from `onMount` or use the `onDestroy` lifecycle function for any cleanup when the component is removed:
+Using Svelte, we should get a reference to the element instead. You can also return a function from `onMount`, or use the `onDestroy` lifecycle function for any cleanup when the component is removed:
 
 ```svelte:App.svelte {2,5,10,13-16,19}
-<script>
+<script lang="ts">
 	import { onDestroy, onMount } from 'svelte'
 	import gsap from 'gsap'
 
-	let tween
-	let target
+	let tween: gsap.core.Tween
+	let target: HTMLElement
 
 	onMount(() => {
 		tween = gsap.to(target, { rotation: 180, x: 100, duration: 1 })
@@ -3721,7 +3825,7 @@ Using Svelte, we should get a reference to the element instead. I also want to s
 	})
 </script>
 
-<div bind:this={target}></div>
+<div class="box" bind:this={target}></div>
 
 <style>
 	.box {
@@ -3738,11 +3842,11 @@ Using Svelte, we should get a reference to the element instead. I also want to s
 You can also use effects to achieve the same thing:
 
 ```svelte:App.svelte {5,7-10,13}
-<script>
+<script lang="ts">
 	import gsap from 'gsap'
 
-	let tween
-	let target
+	let tween: gsap.core.Tween
+	let target: HTMLElement
 
 	$effect(() => {
 		tween = gsap.to(target, { rotation: 180, x: 100, duration: 1 })
@@ -3750,7 +3854,7 @@ You can also use effects to achieve the same thing:
 	})
 </script>
 
-<div bind:this={target}></div>
+<div class="box" bind:this={target}></div>
 
 <style>
 	.box {
@@ -3764,7 +3868,9 @@ You can also use effects to achieve the same thing:
 
 So why do both of them exist?
 
-Effects aren't lifecycle functions because their "lifecycle" depends on the value inside of them updating. You could end up tracking some state inside of the effect and then have to [untrack](https://svelte.dev/docs/svelte/svelte#untrack) the value:
+Effects aren't component lifecycle functions, because their "lifecycle" depends on the value inside of them updating.
+
+You could end up tracking some state inside of the effect and then have to [untrack](https://svelte.dev/docs/svelte/svelte#untrack) the value:
 
 ```ts:example
 import { untrack } from 'svelte'
@@ -3790,7 +3896,7 @@ Alright, our code works! Let's go a step further and create a `<Tween>` componen
 	type Props = {
 		tween: gsap.core.Tween
 		vars: gsap.TweenVars
-		children?: Snippet
+		children: Snippet
 	}
 
 	let { tween = $bindable(), vars, children }: Props = $props()
@@ -3834,12 +3940,14 @@ This gives us a generic animation component we can pass any element to, and bind
 
 ### Element Lifecycle Functions Using Attachments
 
-So far we learned how we can use `onMount` to get a reference to an element when the component is added. What if you had `onMount` for elements instead of components? You would have attachments.
+So far, we learned how we can use `onMount` to get a reference to an element when the component is added.
+
+What if you had `onMount` for elements instead of components? You would have attachments.
 
 Attachments are functions you can "attach" to regular elements that run when the element is added to the DOM, or when state inside of them updates:
 
 ```svelte:example {2,8-15}
-<script>
+<script lang="ts">
 	let color = $state('orangered')
 </script>
 
@@ -3847,7 +3955,7 @@ Attachments are functions you can "attach" to regular elements that run when the
 	width={400}
 	height={400}
 	{@attach (canvas) => {
-		const context = canvas.getContext('2d')
+		const context = canvas.getContext('2d')!
 
 		$effect(() => {
 			context.fillStyle = color
@@ -3857,7 +3965,9 @@ Attachments are functions you can "attach" to regular elements that run when the
 ></canvas>
 ```
 
-Instead of the animation component, we can create an attachment function which can be used on any element. The `tween` function accept the animations options and an optional callback to get a reference to the tween:
+Instead of the animation component, we can create an attachment function which can be used on any element.
+
+In this example, the `tween` function accept the animations options and an optional callback to get a reference to the tween:
 
 ```svelte:App.svelte {4-12,18-21}
 <script lang="ts">
@@ -3887,7 +3997,7 @@ Instead of the animation component, we can create an attachment function which c
 <button onclick={() => animation.restart()}>Play</button>
 ```
 
-A cool idea would be to have different attachments like `{@attach tween.from(...)}` or `{@attach tween.to(...)}`. The fun comes from picking the API shape you want that works in harmony with Svelte.
+The fun comes from picking the API shape you want that works in harmony with Svelte — for example, it would be cool to have different attachments like `{@attach tween.from(...)}` or `{@attach tween.to(...)}`.
 
 ## Reactive Data Structures And Utilities
 
@@ -3970,9 +4080,9 @@ In this example, we use the reactive version of the built-in `Map` object in Jav
 </style>
 ```
 
-There are even reactive utilities you can use such as `MediaQuery` and `prefersReducedMotion`. You can find more [reactive built-ins](https://svelte.dev/docs/svelte/svelte-reactivity) with examples in the Svelte documentation.
+You can find more [reactive built-ins](https://svelte.dev/docs/svelte/svelte-reactivity) like `MediaQuery` and `prefersReducedMotion` with examples in the Svelte documentation.
 
-Svelte even provides a convenient way to make external APIs reactive, which we're going to learn about in the next section.
+Svelte also provides a convenient way to make external APIs reactive, which we're going to learn about in the next section.
 
 ## Reactive Events
 
@@ -4024,7 +4134,9 @@ Let's start by creating the GSAP timeline:
 </style>
 ```
 
-The next step is to subscribe for updates using `eventCallback` from GSAP. Because we need to synchronize with an external system, we need an effect so when we update the time, it updates the playhead and causes `onUpdate` to fire:
+The next step is to subscribe for updates using the `eventCallback` from GSAP.
+
+Here we're using an effect to synchronize with an external system, so when we update the time, it updates the playhead and causes `onUpdate` to fire:
 
 ```svelte:App.svelte {9,14-16,18-20,31-33,35-37,48}
 <script lang="ts">
@@ -4090,19 +4202,19 @@ The next step is to subscribe for updates using `eventCallback` from GSAP. Becau
 </style>
 ```
 
-So what is the downside of this approach? If you create an effect outside of a Svelte component, you might run into an effect orphan error in the constructor:
+So what is the downside of this approach?
+
+If you create an effect outside of a Svelte component, you might run into an effect orphan error in the constructor:
 
 ```ts:timeline.ts
 export const tl = new Timeline(...) // ⚠️ effect orphan
 ```
 
-The reason this happens is because effects need to be inside a parent root effect. This is how Svelte keeps track of every effect and knows what to cleanup when the component is removed from the DOM.
+The reason this happens is because effects need to be created inside a parent root effect. This is how Svelte keeps track of effects, and runs the cleanup when the component is removed from the DOM.
 
-There's an advanced [$effect.root](https://svelte.dev/docs/svelte/$effect#$effect.root) rune you can use and provide a manual cleanup, but **I'm only telling you this if you encounter it because you should never have to use it.**
+Previously, we learned that you can use the `$effect.root` rune and why you should avoid using it.
 
-Not only that, but we're not doing any cleanup for the event either!
-
-Alright, so how can we improve this? It makes more sense to create the effect when we read the value. This creates another problem, because we're creating an effect each time we read the value:
+We also learned how it makes more sense to create the effect when we read the value, but then we're creating an effect each time we read the value:
 
 ```ts:example
 // ...
@@ -4115,7 +4227,9 @@ get time() {
 }
 ```
 
-Thankfully, Svelte has a [createSubscriber](https://svelte.dev/docs/svelte/svelte-reactivity#createSubscriber) function you can use to create a subscriber to subscribe to! The `createSubscriber` function provides a callback which gives you an `update` function. When `update` is invoked, it reruns the subscriber. In our example, the subscriber is the `time` method:
+Thankfully, Svelte has a [createSubscriber](https://svelte.dev/docs/svelte/svelte-reactivity#createSubscriber) function you can use to create a subscriber to subscribe to.
+
+The `createSubscriber` function provides a callback, which gives you an `update` function. When `update` is invoked, it reruns the subscriber. In our example, the subscriber is the `time` method:
 
 ```svelte:App.svelte {10,14-17,28-31,33-35}
 <script lang="ts">
@@ -4179,11 +4293,13 @@ Thankfully, Svelte has a [createSubscriber](https://svelte.dev/docs/svelte/svelt
 </style>
 ```
 
-This makes our code much simpler. We don't need extra state to keep track of the time. Instead, we can just return and set the current time for the timeline using the methods it provides. Also, we can easily do a cleanup! 🧹
+This makes our code much simpler. 🧘
 
-How it works is that `createSubscriber` uses an effect that watches a value that increments when `update` runs, and reruns subscribers while keeping track of the active effects.
+We also don't need extra state to keep track of the time! Instead, we can just return, and set the current time for the timeline using the methods it provides and easily do a cleanup. 🧹
 
-Do you remember the counter example from before, when we talked about how you don't need effects and you can do side-effects inside event handlers?
+The `createSubscriber` function uses an effect that tracks a value that increments when `update` runs, and reruns subscribers while keeping track of the active effects.
+
+Do you remember the counter example from before, when we learned how you don't need effects, and you can do side-effects inside event handlers?
 
 ```ts:counter.svelte.ts
 export class Counter {
@@ -4209,9 +4325,11 @@ export class Counter {
 }
 ```
 
-This can also be made simpler by using `createSubscriber`. You only have to listen for the `storage` event on the `window` and run `update` when it changes to notify subscribers, so you don't even need to use state:
+This can also be made simpler by using `createSubscriber`.
 
-```ts.counter.svelte.ts {5,8-14,17-20,22-24}
+You only have to listen for the `storage` event on the `window` and run `update` when it changes to notify subscribers, so you don't even need to use state:
+
+```ts:counter.svelte.ts {5,8-14,17-20,22-24}
 import { createSubscriber } from 'svelte/reactivity'
 import { on } from 'svelte/events'
 
@@ -4241,6 +4359,6 @@ class Counter {
 
 In this example, we also use the `on` event from Svelte rather than `addEventListener`, because it returns a cleanup function that removes the handler for convenience.
 
-## The Svelte Ecosystem
+## Special Elements
 
 ## Using Svelte With AI

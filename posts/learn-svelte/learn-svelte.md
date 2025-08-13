@@ -4361,4 +4361,86 @@ In this example, we also use the `on` event from Svelte rather than `addEventLis
 
 ## Special Elements
 
+Svelte has special elements you can use at the top level of your component like `<svelte:window>` to add event listeners on the `window` without having to do the cleanup yourself, `<svelte:head>` to add things to the `<head>` element for things like SEO, or `<svelte:element>` to dynamically render elements and more.
+
+This is how it would look like if you had to add and take care of event listeners on the `window` object, `<document>`, or `<body>` element yourself:
+
+```svelte:App.svelte {6-8,11-12}
+<script lang="ts">
+	import { onMount } from 'svelte'
+
+	let scrollY = $state(0)
+
+	function updateScrollPosition() {
+		scrollY = window.scrollY
+	}
+
+	onMount(() => {
+		window.addEventListener('scroll', updateScrollPosition)
+		return () => window.removeEventListener('scroll', updateScrollPosition)
+	})
+</script>
+
+<div>{scrollY}px</div>
+
+<style>
+	:global(body) {
+		height: 8000px;
+	}
+
+	div {
+		position: fixed;
+		top: 50%;
+		left: 50%;
+		translate: -50% -50%;
+		font-size: 8vw;
+		font-weight: 700;
+	}
+</style>
+```
+
+Thankfully, Svelte makes this easy with special elements like `<svelte:window>` and it does the cleanup for you:
+
+```svelte:App.svelte {9}
+<script lang="ts">
+	let scrollY = $state(0)
+
+	function updateScrollPosition() {
+		scrollY = window.scrollY
+	}
+</script>
+
+<svelte:window onscroll={updateScrollPosition} />
+
+<div>{scrollY}px</div>
+```
+
+You can also bind properties like the scroll position instead:
+
+```svelte:App.svelte {2,5}
+<script lang="ts">
+	let scrollY = $state(0)
+</script>
+
+<svelte:window bind:scrollY />
+```
+
+## Legacy Svelte
+
+Svelte 5 was a large shift from previous versions of Svelte that introduced a new system of reactivity with runes, and snippets replacing slots. You're going to run into legacy Svelte code at some point, so it's worth reading about the [legacy APIs](https://svelte.dev/docs/svelte/legacy-overview) in the Svelte documentation.
+
+Keep in mind that Svelte components are by default in **legacy mode** for backwards compatibility. If you use runes in your component, it's going to be in **runes mode**. This is worth noting because you might run into unexpected behavior when you're using legacy components. If you use the Svelte for VS Code extension, it's going to show the mode in the top left corner of the editor.
+
+You can always make sure that you're in runes mode by changing the Svelte compiler options in `svelte.config.js` for the entire project, or per component:
+
+```svelte:Component.svelte
+<svelte:options runes={true} />
+```
+
 ## Using Svelte With AI
+
+I live in the stone age when it comes to AI and use free tools like [Supermaven](https://supermaven.com/) for code suggestions and [Perplexity](https://www.perplexity.ai/) as my search engine, so I don't use paid AI coding editors.
+
+Newer AI models seem to be getting better at supporting the latest Svelte syntax, but it's still not perfect and it's often going to hallucinate features that don't exist with overwhelming confidence.
+
+If you're using AI and want the latest Svelte syntax suggestions, Svelte has [LLM friendly documentation](https://svelte.dev/docs/llms) you can feed to an AI context window for more accurate suggestions.

@@ -4361,7 +4361,7 @@ In this example, we also use the `on` event from Svelte rather than `addEventLis
 
 ## Special Elements
 
-Svelte has special elements you can use at the top level of your component like `<svelte:window>` to add event listeners on the `window` without having to do the cleanup yourself, `<svelte:head>` to add things to the `<head>` element for things like SEO, or `<svelte:element>` to dynamically render elements and more.
+Svelte has special elements you can use at the top-level of your component like `<svelte:window>` to add event listeners on the `window` without having to do the cleanup yourself, `<svelte:head>` to add things to the `<head>` element for things like SEO, or `<svelte:element>` to dynamically render elements and more.
 
 This is how it would look like if you had to add and take care of event listeners on the `window` object, `<document>`, or `<body>` element yourself:
 
@@ -4371,13 +4371,13 @@ This is how it would look like if you had to add and take care of event listener
 
 	let scrollY = $state(0)
 
-	function updateScrollPosition() {
+	function handleScroll() {
 		scrollY = window.scrollY
 	}
 
 	onMount(() => {
-		window.addEventListener('scroll', updateScrollPosition)
-		return () => window.removeEventListener('scroll', updateScrollPosition)
+		window.addEventListener('scroll', handleScroll)
+		return () => window.removeEventListener('scroll', handleScroll)
 	})
 </script>
 
@@ -4405,17 +4405,17 @@ Thankfully, Svelte makes this easy with special elements like `<svelte:window>` 
 <script lang="ts">
 	let scrollY = $state(0)
 
-	function updateScrollPosition() {
+	function handleScroll() {
 		scrollY = window.scrollY
 	}
 </script>
 
-<svelte:window onscroll={updateScrollPosition} />
+<svelte:window onscroll={handleScroll} />
 
 <div>{scrollY}px</div>
 ```
 
-You can also bind properties like the scroll position instead:
+There are also bindings for properties like the scroll position:
 
 ```svelte:App.svelte {2,5}
 <script lang="ts">
@@ -4423,6 +4423,16 @@ You can also bind properties like the scroll position instead:
 </script>
 
 <svelte:window bind:scrollY />
+```
+
+Svelte also exports reactive `window` values from `reactivity/window` so you don't even have to use a special element and bind the property to a value:
+
+```svelte:App.svelte
+<script lang="ts">
+	import { scrollY } from 'svelte/reactivity/window'
+</script>
+
+<div>{scrollY.current}px</div>
 ```
 
 ## Legacy Svelte

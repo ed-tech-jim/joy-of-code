@@ -4439,7 +4439,9 @@ Svelte also exports reactive `window` values from `reactivity/window` so you don
 
 Svelte 5 was a large shift from previous versions of Svelte that introduced a new system of reactivity with runes, and snippets replacing slots. You're going to run into legacy Svelte code at some point, so it's worth reading about the [legacy APIs](https://svelte.dev/docs/svelte/legacy-overview) in the Svelte documentation.
 
-Keep in mind that Svelte components are by default in **legacy mode** for backwards compatibility. If you use runes in your component, it's going to be in **runes mode**. This is worth noting because you might run into unexpected behavior when you're using legacy components. If you use the Svelte for VS Code extension, it's going to show the mode in the top left corner of the editor.
+Keep in mind that Svelte components are by default in **legacy mode** for backwards compatibility. If you use runes in your component, it's going to be in **runes mode**.
+
+This is worth noting because you might run into unexpected behavior when you're using legacy components. If you use the Svelte for VS Code extension, it's going to show the mode in the top left corner of the editor.
 
 You can always make sure that you're in runes mode by changing the Svelte compiler options in `svelte.config.js` for the entire project, or per component:
 
@@ -4449,7 +4451,7 @@ You can always make sure that you're in runes mode by changing the Svelte compil
 
 ## Using Svelte With AI
 
-I live in the stone age when it comes to AI and use free tools like [Supermaven](https://supermaven.com/) for code suggestions and [Perplexity](https://www.perplexity.ai/) as my search engine, so I don't use paid AI coding editors.
+I live in the stone age when it comes to AI and use free tools like [Supermaven](https://supermaven.com/) for code completion and [Perplexity](https://www.perplexity.ai/) as my search engine, so I don't use paid AI coding editors.
 
 Newer AI models seem to be getting better at supporting the latest Svelte syntax, but it's still not perfect and it's often going to hallucinate features that don't exist with overwhelming confidence.
 
